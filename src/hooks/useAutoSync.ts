@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import { syncPendingActivities, type SyncStatus } from '../services/syncService';
+import { syncAll, type SyncStatus } from '../services/syncService';
 
 /** Triggers a background sync whenever connectivity is (re)gained, and exposes a manual trigger + last result. */
 export function useAutoSync(userId: string | null) {
@@ -13,7 +13,7 @@ export function useAutoSync(userId: string | null) {
 
     setIsSyncing(true);
     try {
-      const status = await syncPendingActivities(userId, isOnline);
+      const status = await syncAll(userId, isOnline);
       setLastStatus(status);
       return status;
     } finally {

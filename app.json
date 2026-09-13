@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
@@ -31,13 +31,6 @@
           "locationWhenInUsePermission": "RunTracker ใช้ตำแหน่ง GPS ของคุณเพื่อคำนวณระยะทางและความเร็วระหว่างการวิ่ง/ปั่นจักรยาน",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": "REPLACE_WITH_YOUR_ANDROID_GOOGLE_MAPS_API_KEY",
-          "iosGoogleMapsApiKey": "REPLACE_WITH_YOUR_IOS_GOOGLE_MAPS_API_KEY"
         }
       ],
       "expo-font"

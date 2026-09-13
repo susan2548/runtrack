@@ -10,9 +10,9 @@ import { GlassCard, Label, MonoValue, PillButton } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { Activity } from '../types';
-import type { HistoryStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<HistoryStackParamList, 'ActivityDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ActivityDetail'>;
 
 // See HeatmapScreen.web.tsx — same reason this screen has a web-only twin
 // that skips react-native-maps entirely (map view swapped for a notice).
@@ -83,9 +83,9 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
             color={colors.secondary}
           />
           <StatCard
-            icon={activity.synced ? 'cloud-done-outline' : 'cloud-offline-outline'}
+            icon={activity.sync_state === 'synced' ? 'cloud-done-outline' : 'cloud-offline-outline'}
             label={t('status')}
-            value={activity.synced ? t('synced') : t('pendingSync')}
+            value={activity.sync_state === 'synced' ? t('synced') : t('pendingSync')}
           />
         </View>
 

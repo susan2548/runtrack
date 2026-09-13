@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { HudGridBackground } from '../components/HudGridBackground';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,28 +8,31 @@ import {
   getActivityById,
   getLocationPointsByActivity,
 } from '../db/activityRepository';
+import { getSplitsByActivity } from '../db/splitRepository';
 import { formatDistanceKm, formatDuration, formatSpeedKmh } from '../utils/format';
 import { shareText } from '../utils/share';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { GlassCard, Label, MonoValue, PillButton } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { Activity, LocationPoint } from '../types';
-import type { HistoryStackParamList } from '../navigation/types';
+import type { Activity, LocationPoint, Split } from '../types';
+import type { RootStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<HistoryStackParamList, 'ActivityDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ActivityDetail'>;
 
 export default function ActivityDetailScreen({ route, navigation }: Props) {
   const { t } = useLanguage();
   const { activityId } = route.params;
   const [activity, setActivity] = useState<Activity | null>(null);
   const [points, setPoints] = useState<LocationPoint[]>([]);
+  const [splits, setSplits] = useState<Split[]>([]);
 
   useEffect(() => {
-    Promise.all([getActivityById(activityId), getLocationPointsByActivity(activityId)]).then(
-      ([activityRow, pointRows]) => {
+    Promise.all([getActivityById(activityId), getLocationPointsByActivity(activityId), getSplitsByActivity(activityId)]).then(
+      ([activityRow, pointRows, splitRows]) => {
         setActivity(activityRow);
         setPoints(pointRows);
+        setSplits(splitRows);
       }
     );
   }, [activityId]);
@@ -46,7 +49,7 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
   }
 
   const coordinates = points.map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
-  const durationMs = (activity.end_time ?? activity.start_time) - activity.start_time;
+  const durationMs = activity.moving_time_ms || ((activity.end_time ?? activity.start_time) - activity.start_time);
   const typeLabel = activity.type === 'running' ? t('modeRun') : t('modeCycle');
 
   const handleShare = async () => {
@@ -77,6 +80,7 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
     <View style={styles.root}>
       <HudGridBackground />
       <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.mapContainer}>
           {coordinates.length > 0 ? (
             <MapView
@@ -103,6 +107,13 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
           )}
         </View>
 
+        {activity.title || activity.notes ? (
+          <View style={styles.activityCopy}>
+            {activity.title ? <Text style={styles.activityTitle}>{activity.title}</Text> : null}
+            {activity.notes ? <Text style={styles.activityNotes}>{activity.notes}</Text> : null}
+          </View>
+        ) : null}
+
         <View style={styles.statsGrid}>
           <StatCard icon="navigate-outline" label={t('distance')} value={`${formatDistanceKm(activity.total_distance)} km`} />
           <StatCard icon="time-outline" label={t('time')} value={formatDuration(durationMs)} />
@@ -115,16 +126,31 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
             color={colors.secondary}
           />
           <StatCard
-            icon={activity.synced ? 'cloud-done-outline' : 'cloud-offline-outline'}
+            icon={activity.sync_state === 'synced' ? 'cloud-done-outline' : 'cloud-offline-outline'}
             label={t('status')}
-            value={activity.synced ? t('synced') : t('pendingSync')}
+            value={activity.sync_state === 'synced' ? t('synced') : t('pendingSync')}
           />
         </View>
 
+        {splits.length > 0 ? (
+          <View style={styles.splitSection}>
+            <Text style={styles.splitTitle}>{t('splits')}</Text>
+            {splits.map((split) => (
+              <View key={split.id} style={styles.splitRow}>
+                <MonoValue size={15}>{split.split_index}</MonoValue>
+                <Text style={styles.splitDistance}>{formatDistanceKm(split.distance_meters)} km</Text>
+                <MonoValue size={15}>{formatDuration(split.duration_ms).slice(3)}</MonoValue>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.actionsRow}>
           <PillButton label={t('shareActivity')} onPress={handleShare} variant="primary" flex={1} />
-          <PillButton label={t('delete')} onPress={handleDelete} variant="secondary" flex={1} />
+          <PillButton label={t('editActivity')} onPress={() => navigation.navigate('ActivityEditor', { activityId, afterFinish: false })} variant="secondary" flex={1} />
         </View>
+        <PillButton label={t('delete')} onPress={handleDelete} variant="ghost" />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -157,6 +183,7 @@ function StatCard({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   safeArea: { flex: 1 },
+  content: { paddingBottom: spacing.lg },
   loadingText: { color: colors.textMuted, textAlign: 'center', marginTop: 40, fontFamily: fontFamily.body },
   mapContainer: { height: 260, margin: spacing.md, borderRadius: radius.lg, overflow: 'hidden' },
   map: { flex: 1 },
@@ -166,5 +193,12 @@ const styles = StyleSheet.create({
   statCard: { width: '31%' },
   statCardInner: { alignItems: 'center', gap: 4 },
   statLabel: { textAlign: 'center' },
-  actionsRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, marginTop: 'auto' },
+  activityCopy: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  activityTitle: { color: colors.text, fontFamily: fontFamily.display, fontSize: 24 },
+  activityNotes: { color: colors.textMuted, fontFamily: fontFamily.body, lineHeight: 20, marginTop: 4 },
+  splitSection: { margin: spacing.md, backgroundColor: colors.surfaceSolid, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },
+  splitTitle: { color: colors.text, fontFamily: fontFamily.headline, fontSize: 17 },
+  splitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
+  splitDistance: { color: colors.textMuted, fontFamily: fontFamily.body },
+  actionsRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
 });

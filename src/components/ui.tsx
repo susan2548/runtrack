@@ -21,7 +21,7 @@ export function GlassCard({
 }) {
   return (
     <Animated.View
-      entering={FadeInUp.duration(380).delay(delay)}
+      entering={FadeInUp.duration(260).delay(delay)}
       style={[styles.cardShadow, glowVariant ? glow[glowVariant] : null, style]}
     >
       <BlurView intensity={36} tint="dark" style={styles.cardBlur}>
@@ -96,6 +96,9 @@ export function PillButton({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={flex ? { flex } : undefined}
@@ -111,7 +114,7 @@ export function PillButton({
         <View style={[styles.pillButtonInner, variantStyle.container]}>
           {variant === 'primary' ? (
             <LinearGradient
-              colors={['#00ff66', '#00b84d']}
+              colors={['#68F58F', '#37C966']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -143,6 +146,9 @@ export function LanguageToggle() {
         <Pressable
           key={lang}
           onPress={() => setLanguage(lang)}
+          accessibilityRole="button"
+          accessibilityLabel={lang === 'en' ? 'English' : 'ภาษาไทย'}
+          accessibilityState={{ selected: language === lang }}
           style={[styles.langOption, language === lang && styles.langOptionActive]}
         >
           <Text style={[styles.langOptionText, language === lang && styles.langOptionTextActive]}>
@@ -155,13 +161,13 @@ export function LanguageToggle() {
 }
 
 const styles = StyleSheet.create({
-  cardShadow: { borderRadius: radius.lg },
-  cardBlur: { borderRadius: radius.lg, overflow: 'hidden' },
+  cardShadow: { borderRadius: radius.xl },
+  cardBlur: { borderRadius: radius.xl, overflow: 'hidden' },
   cardOverlay: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.md,
   },
   label: {

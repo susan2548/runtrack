@@ -1,9 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { getAllActivities } from '../db/activityRepository';
+import { getGoal } from '../db/goalRepository';
+import { calculateStreak, startOfWeek } from '../utils/activityMetrics';
 import { formatDistanceKm, formatDuration, formatSpeedKmh } from '../utils/format';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { GlassCard, Label, MonoValue } from '../components/ui';
@@ -11,8 +14,9 @@ import { HudGridBackground } from '../components/HudGridBackground';
 import { IconBadge } from '../components/IconBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { Activity } from '../types';
+import type { Goal } from '../types';
+import type { RootStackParamList } from '../navigation/types';
 
-const DAYS_TO_SHOW = 7;
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function lastNDaysBuckets(activities: Activity[], days: number) {
@@ -38,13 +42,16 @@ function lastNDaysBuckets(activities: Activity[], days: number) {
 
 export default function StatsScreen() {
   const { t } = useLanguage();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [runGoal, setRunGoal] = useState<Goal | null>(null);
+  const [periodDays, setPeriodDays] = useState<7 | 30>(7);
 
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      getAllActivities().then((rows) => {
-        if (mounted) setActivities(rows);
+      Promise.all([getAllActivities(), getGoal('running')]).then(([rows, goal]) => {
+        if (mounted) { setActivities(rows); setRunGoal(goal); }
       });
       return () => {
         mounted = false;
@@ -65,8 +72,13 @@ export default function StatsScreen() {
     [finished]
   );
 
-  const buckets = lastNDaysBuckets(finished, DAYS_TO_SHOW);
+  const buckets = lastNDaysBuckets(finished, periodDays);
   const maxDistance = Math.max(...buckets.map((b) => b.distanceMeters), 1);
+  const weeklyRunDistance = finished
+    .filter((activity) => activity.type === 'running' && activity.start_time >= startOfWeek())
+    .reduce((sum, activity) => sum + activity.total_distance, 0);
+  const goalPercent = Math.min(100, Math.round((weeklyRunDistance / Math.max(runGoal?.weekly_distance_meters ?? 1, 1)) * 100));
+  const streak = calculateStreak(finished);
 
   return (
     <View style={styles.root}>
@@ -122,9 +134,20 @@ export default function StatsScreen() {
               value={`${formatSpeedKmh(avgSpeed)} km/h`}
               delay={160}
             />
+            <SummaryCard icon="flame-outline" label={t('streak')} value={`${streak} ${t('dayStreak')}`} color={colors.secondary} delay={180} />
+            <SummaryCard icon="locate-outline" label={t('weeklyGoal')} value={`${goalPercent}%`} color={colors.primary} delay={200} />
           </View>
 
-          <Text style={styles.sectionTitle}>{t('last7Days')}</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{periodDays === 7 ? t('last7Days') : t('last30Days')}</Text>
+            <View style={styles.periodToggle}>
+              {([7, 30] as const).map((days) => (
+                <Pressable key={days} onPress={() => setPeriodDays(days)} style={[styles.periodButton, periodDays === days && styles.periodButtonActive]}>
+                  <Text style={[styles.periodText, periodDays === days && styles.periodTextActive]}>{days}D</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           <GlassCard delay={200}>
             <View style={styles.chart}>
               {buckets.map((bucket, i) => {
@@ -147,12 +170,19 @@ export default function StatsScreen() {
                         />
                       </Animated.View>
                     </View>
-                    <Label>{bucket.label}</Label>
+                    <Label>{periodDays === 7 || i % 5 === 0 ? bucket.label : ''}</Label>
                   </View>
                 );
               })}
             </View>
           </GlassCard>
+          <Pressable onPress={() => navigation.navigate('Heatmap')} accessibilityRole="button">
+            <GlassCard style={styles.heatmapLink}>
+              <IconBadge name="map" set="mci" size={40} color={colors.tertiary} />
+              <View style={{ flex: 1 }}><Text style={styles.sectionTitle}>{t('routeHeatmap')}</Text><Label>{t('heatmapTitle')}</Label></View>
+              <IconBadge name="chevron-forward" size={26} />
+            </GlassCard>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -199,6 +229,13 @@ const styles = StyleSheet.create({
   summaryCardInner: { alignItems: 'center', gap: 4 },
   summaryLabel: { textAlign: 'center' },
   sectionTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: 14, color: colors.text, marginTop: spacing.xs },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  periodToggle: { flexDirection: 'row', borderRadius: radius.full, padding: 3, backgroundColor: colors.surfaceHigh },
+  periodButton: { borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 6 },
+  periodButtonActive: { backgroundColor: colors.primary },
+  periodText: { color: colors.textMuted, fontFamily: fontFamily.monoLabel, fontSize: 10 },
+  periodTextActive: { color: colors.onPrimary },
+  heatmapLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   chart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -207,5 +244,5 @@ const styles = StyleSheet.create({
   },
   barColumn: { alignItems: 'center', gap: 6, flex: 1 },
   barTrack: { height: 100, justifyContent: 'flex-end' },
-  bar: { width: 14, borderRadius: radius.sm, overflow: 'hidden' },
+  bar: { width: 8, minWidth: 3, borderRadius: radius.sm, overflow: 'hidden' },
 });

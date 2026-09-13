@@ -37,15 +37,19 @@
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.2",
     "@types/react": "~19.2.2",
     "@types/three": "^0.186.0",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/**/*.test.ts"
   },
   "private": true
 }

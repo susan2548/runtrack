@@ -1,54 +1,85 @@
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import HomeScreen from '../screens/HomeScreen';
 import TrackingScreen from '../screens/TrackingScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ActivityDetailScreen from '../screens/ActivityDetailScreen';
+import ActivityEditorScreen from '../screens/ActivityEditorScreen';
 import HeatmapScreen from '../screens/HeatmapScreen';
 import StatsScreen from '../screens/StatsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import { colors } from '../theme/theme';
+import OnboardingScreen from '../screens/OnboardingScreen';
+import { colors, fontFamily } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { HistoryStackParamList, RootTabParamList } from './types';
+import { useAppSetup } from '../onboarding/AppSetupContext';
+import type { RootStackParamList, RootTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
-const HistoryStack = createNativeStackNavigator<HistoryStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function HistoryStackNavigator() {
+const icons: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
+  Home: 'home-outline',
+  Track: 'radio-button-on-outline',
+  Progress: 'analytics-outline',
+  Profile: 'person-outline',
+};
+
+function MainTabs() {
   const { t } = useLanguage();
+  const labels: Record<keyof RootTabParamList, string> = {
+    Home: t('tabHome'),
+    Track: t('tabTrack'),
+    Progress: t('tabProgress'),
+    Profile: t('tabProfile'),
+  };
   return (
-    <HistoryStack.Navigator screenOptions={{ headerShown: false }}>
-      <HistoryStack.Screen name="HistoryList" component={HistoryScreen} />
-      <HistoryStack.Screen
-        name="ActivityDetail"
-        component={ActivityDetailScreen}
-        options={{
-          headerShown: true,
-          headerTitle: t('activityDetailTitle'),
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-        }}
-      />
-    </HistoryStack.Navigator>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabItem,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textFaint,
+        tabBarIcon: ({ color, size }) => (
+          <View style={route.name === 'Track' ? styles.trackIcon : undefined}>
+            <Ionicons name={icons[route.name]} color={route.name === 'Track' ? colors.onPrimary : color} size={route.name === 'Track' ? 28 : size} />
+          </View>
+        ),
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: labels.Home }} />
+      <Tab.Screen name="Track" component={TrackingScreen} options={{ tabBarLabel: labels.Track }} />
+      <Tab.Screen name="Progress" component={StatsScreen} options={{ tabBarLabel: labels.Progress }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: labels.Profile }} />
+    </Tab.Navigator>
   );
 }
 
 export default function RootNavigator() {
+  const { ready, onboardingCompleted } = useAppSetup();
   const { t } = useLanguage();
+  if (!ready) return <View style={styles.loading}><Text style={styles.loadingText}>{t('loadingApp')}</Text></View>;
+  if (!onboardingCompleted) return <OnboardingScreen />;
 
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-      }}
-    >
-      <Tab.Screen name="Track" component={TrackingScreen} options={{ tabBarLabel: t('tabTrack') }} />
-      <Tab.Screen name="History" component={HistoryStackNavigator} options={{ tabBarLabel: t('tabHistory') }} />
-      <Tab.Screen name="Heatmap" component={HeatmapScreen} options={{ tabBarLabel: t('tabHeatmap') }} />
-      <Tab.Screen name="Stats" component={StatsScreen} options={{ tabBarLabel: t('tabStats') }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('tabProfile') }} />
-    </Tab.Navigator>
+    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerTitleStyle: { fontFamily: fontFamily.headline }, contentStyle: { backgroundColor: colors.canvas } }}>
+      <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+      <Stack.Screen name="History" component={HistoryScreen} options={{ title: t('historyTitle') }} />
+      <Stack.Screen name="ActivityDetail" component={ActivityDetailScreen} options={{ title: t('activityDetailTitle') }} />
+      <Stack.Screen name="ActivityEditor" component={ActivityEditorScreen} options={{ title: t('editActivity') }} />
+      <Stack.Screen name="Heatmap" component={HeatmapScreen} options={{ title: t('routeHeatmap') }} />
+    </Stack.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+  loadingText: { color: colors.textMuted, fontFamily: fontFamily.body },
+  tabBar: { height: 70, paddingTop: 8, paddingBottom: 8, backgroundColor: '#0D110F', borderTopColor: colors.border },
+  tabItem: { minHeight: 48 },
+  tabLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: 10 },
+  trackIcon: { width: 46, height: 46, marginTop: -18, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderWidth: 4, borderColor: colors.canvas },
+});

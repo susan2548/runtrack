@@ -1,239 +1,198 @@
-import { useState } from 'react';
-import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useActivityTracker } from '../hooks/useActivityTracker';
-import { HudGridBackground } from '../components/HudGridBackground';
 import { formatDistanceKm, formatDuration, formatPaceMinPerKm, formatSpeedKmh } from '../utils/format';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
-import { DAILY_GOAL_METERS } from '../constants/goals';
-import { GlassCard, Label, MonoValue, Badge, PillButton, LanguageToggle } from '../components/ui';
-import { PulseRing } from '../components/PulseRing';
-import { ProgressRing } from '../components/ProgressRing';
-import { Hud3DOrb } from '../components/Hud3DOrb';
+import { GlassCard, Label, MonoValue, PillButton } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
+import { LiveRouteMap } from '../components/LiveRouteMap';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { ActivityType } from '../types';
+import type { RootStackParamList } from '../navigation/types';
 
 export default function TrackingScreen() {
   const { t } = useLanguage();
-  const [activityType, setActivityType] = useState<ActivityType>('running');
-  const tracker = useActivityTracker(activityType);
-
-  const isRunning = activityType === 'running';
-  const speedLabel = isRunning
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const tracker = useActivityTracker();
+  const active = tracker.status === 'tracking' || tracker.status === 'paused';
+  const isRunning = tracker.activityType === 'running';
+  const primaryMetric = isRunning
     ? formatPaceMinPerKm(tracker.currentSpeedMs)
     : formatSpeedKmh(tracker.currentSpeedMs);
-  const speedUnit = isRunning ? '/KM' : 'KM/H';
-  const isActive = tracker.status === 'tracking' || tracker.status === 'paused';
-  const goalMeters = DAILY_GOAL_METERS[activityType];
-  const goalProgress = tracker.distanceMeters / goalMeters;
+
+  const start = async () => {
+    const result = await tracker.start();
+    if (result && !result.backgroundGranted) {
+      Alert.alert(t('backgroundTitle'), t('backgroundBody'), [
+        { text: t('notNow'), style: 'cancel' },
+        { text: t('enable'), onPress: () => void tracker.enableBackgroundTracking() },
+      ]);
+    }
+  };
+
+  const finish = async () => {
+    const activityId = await tracker.finish();
+    if (activityId) navigation.navigate('ActivityEditor', { activityId, afterFinish: true });
+  };
+
+  if (tracker.initializing) {
+    return <View style={styles.loading}><Text style={styles.muted}>{t('loadingApp')}</Text></View>;
+  }
 
   return (
     <View style={styles.root}>
-      <HudGridBackground />
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.container}>
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>{t('trackHeaderTitle')}</Text>
-              <View style={styles.recordingRow}>
-                {tracker.status === 'tracking' ? (
-                  <PulseRing color={colors.primary} size={7} />
-                ) : (
-                  <View style={[styles.statusDot, tracker.status === 'paused' && styles.statusDotPaused]} />
-                )}
-                <Label>{tracker.status === 'paused' ? t('trackPaused') : t('trackRecording')}</Label>
-              </View>
+            <View>
+              <Text style={styles.eyebrow}>{active ? t('activeSession') : t('trackHeaderTitle')}</Text>
+              <Text style={styles.title}>{isRunning ? t('modeRun') : t('modeCycle')}</Text>
             </View>
-            <LanguageToggle />
-          </View>
-
-          {/* 3D GPS beacon hero — a real WebGL scene, themed as a location pin + accuracy ring + orbiting satellites */}
-          <View style={styles.orbHero}>
-            <Hud3DOrb size={132} />
-          </View>
-
-          {/* Mode toggle — locked once a session has started */}
-          <View style={styles.modeSwitch}>
-            {(['running', 'cycling'] as ActivityType[]).map((mode) => (
-              <Pressable
-                key={mode}
-                disabled={isActive}
-                onPress={() => setActivityType(mode)}
-                style={[styles.modeButton, activityType === mode && styles.modeButtonActive]}
-              >
-                <Text style={[styles.modeButtonText, activityType === mode && styles.modeButtonTextActive]}>
-                  {mode === 'running' ? t('modeRun') : t('modeCycle')}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* GPS telemetry row */}
-          <View style={styles.gpsRow}>
-            <View style={styles.recordingRow}>
-              {tracker.accuracyMeters !== null ? (
-                <PulseRing color={colors.tertiary} size={6} />
-              ) : (
-                <View style={styles.statusDot} />
-              )}
-              <Label>
-                {tracker.accuracyMeters !== null
-                  ? `${t('gpsAccuracy')}: ±${tracker.accuracyMeters.toFixed(1)}m`
-                  : t('gpsWaiting')}
-              </Label>
+            <View style={[styles.gpsChip, tracker.accuracyMeters !== null && tracker.accuracyMeters <= 25 && styles.gpsChipReady]}>
+              <View style={[styles.dot, tracker.accuracyMeters !== null && tracker.accuracyMeters <= 25 && styles.dotReady]} />
+              <Text style={styles.gpsText}>
+                {tracker.accuracyMeters === null || tracker.accuracyMeters > 25 ? t('gpsWeak') : t('gpsReady')}
+              </Text>
             </View>
           </View>
 
-          {tracker.permissionDenied ? (
-            <GlassCard glowVariant="secondary">
-              <Text style={styles.permissionText}>{t('permissionError')}</Text>
-            </GlassCard>
+          {!active ? (
+            <View style={styles.modeSwitch} accessibilityRole="tablist">
+              {(['running', 'cycling'] as ActivityType[]).map((type) => (
+                <Pressable
+                  key={type}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tracker.activityType === type }}
+                  onPress={() => tracker.setActivityType(type)}
+                  style={[styles.modeButton, tracker.activityType === type && styles.modeButtonActive]}
+                >
+                  <IconBadge
+                    name={type === 'running' ? 'run' : 'bike'}
+                    set="mci"
+                    size={30}
+                    color={tracker.activityType === type ? colors.onPrimary : colors.textMuted}
+                  />
+                  <Text style={[styles.modeText, tracker.activityType === type && styles.modeTextActive]}>
+                    {type === 'running' ? t('modeRun') : t('modeCycle')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           ) : null}
 
-          {/* Hero metric: distance, with a goal progress ring */}
-          <GlassCard glowVariant={tracker.status === 'tracking' ? 'primary' : undefined}>
-            <View style={styles.heroContent}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.cardHeaderRow}>
-                  <Label>{t('totalDistance')}</Label>
-                  <Badge tone="primary">REALTIME</Badge>
-                </View>
-                <View style={styles.heroRow}>
-                  <MonoValue size={Platform.OS === 'web' ? 36 : 44} color={colors.text}>
-                    {formatDistanceKm(tracker.distanceMeters)}
-                  </MonoValue>
-                  <Text style={styles.heroUnit}>KM</Text>
-                </View>
-                <Text style={styles.goalText}>
-                  {(goalMeters / 1000).toFixed(0)} KM {t('goalLabel')}
-                </Text>
-              </View>
-              <ProgressRing progress={goalProgress} size={92} strokeWidth={8}>
-                <MonoValue size={16}>{Math.min(100, Math.round(goalProgress * 100))}%</MonoValue>
-              </ProgressRing>
+          {tracker.recovered ? (
+            <GlassCard glowVariant="secondary"><Text style={styles.recovered}>{t('recoveredSession')}</Text></GlassCard>
+          ) : null}
+          {tracker.permissionDenied ? (
+            <GlassCard glowVariant="secondary"><Text style={styles.warning}>{t('permissionError')}</Text></GlassCard>
+          ) : null}
+
+          <View style={styles.timerBlock}>
+            <Label>{t('elapsedTime')}</Label>
+            <MonoValue size={48}>{formatDuration(tracker.elapsedMs)}</MonoValue>
+          </View>
+
+          <View style={styles.primaryMetrics}>
+            <View style={styles.metricHero}>
+              <MonoValue size={38}>{formatDistanceKm(tracker.distanceMeters)}</MonoValue>
+              <Text style={styles.unit}>KM</Text>
+              <Label>{t('distance')}</Label>
             </View>
-          </GlassCard>
-
-          {/* Speed / pace + elapsed time */}
-          <View style={styles.row}>
-            <GlassCard style={styles.halfCard}>
-              <View style={styles.metricLabelRow}>
-                <IconBadge name="speedometer-outline" size={26} />
-                <Label>{isRunning ? t('currentPace') : t('groundSpeed')}</Label>
-              </View>
-              <View style={styles.heroRow}>
-                <MonoValue size={26}>{speedLabel}</MonoValue>
-                <Text style={styles.metricUnit}>{speedUnit}</Text>
-              </View>
-            </GlassCard>
-            <GlassCard style={styles.halfCard}>
-              <View style={styles.metricLabelRow}>
-                <IconBadge name="time-outline" size={26} />
-                <Label>{t('elapsedTime')}</Label>
-              </View>
-              <MonoValue size={26}>{formatDuration(tracker.elapsedMs)}</MonoValue>
-            </GlassCard>
+            <View style={styles.divider} />
+            <View style={styles.metricHero}>
+              <MonoValue size={38}>{primaryMetric}</MonoValue>
+              <Text style={styles.unit}>{isRunning ? '/KM' : 'KM/H'}</Text>
+              <Label>{isRunning ? t('pace') : t('groundSpeed')}</Label>
+            </View>
           </View>
 
-          {/* Max speed + calories */}
-          <View style={styles.row}>
-            <GlassCard style={styles.halfCard}>
-              <View style={styles.metricLabelRow}>
-                <IconBadge name="flash-outline" size={26} />
-                <Label>{t('maxSpeed')}</Label>
-              </View>
-              <View style={styles.heroRow}>
-                <MonoValue size={26}>{formatSpeedKmh(tracker.maxSpeedMs)}</MonoValue>
-                <Text style={styles.metricUnit}>KM/H</Text>
-              </View>
-            </GlassCard>
-            <GlassCard style={styles.halfCard}>
-              <View style={styles.metricLabelRow}>
-                <IconBadge name="flame-outline" size={26} color={colors.secondary} />
-                <Label>{t('calories')}</Label>
-              </View>
-              <View style={styles.heroRow}>
-                <MonoValue size={26} color={colors.secondary}>
-                  {Math.round(tracker.caloriesKcal)}
-                </MonoValue>
-                <Text style={styles.metricUnit}>KCAL</Text>
-              </View>
-            </GlassCard>
+          <View style={styles.routeHeader}>
+            <Text style={styles.sectionTitle}>{t('liveRoute')}</Text>
+            <Text style={styles.routeMeta}>{tracker.routePoints.length} GPS</Text>
+          </View>
+          <View style={styles.mapWrap}><LiveRouteMap points={tracker.routePoints} /></View>
+
+          <View style={styles.secondaryMetrics}>
+            <SmallMetric icon="flash-outline" label={t('maxSpeed')} value={`${formatSpeedKmh(tracker.maxSpeedMs)} km/h`} />
+            <SmallMetric icon="flame-outline" label={t('calories')} value={`${Math.round(tracker.caloriesKcal)} kcal`} color={colors.secondary} />
           </View>
 
-          <View style={styles.spacer} />
-
-          {/* Controls */}
-          {tracker.status === 'idle' || tracker.status === 'finished' ? (
-            <PillButton
-              label={tracker.status === 'finished' ? t('startNewSession') : t('startTracking')}
-              onPress={tracker.start}
-              variant="primary"
-            />
+          {!active ? (
+            <PillButton label={t('startTracking')} onPress={() => void start()} />
           ) : (
-            <View style={styles.controlsRow}>
-              <PillButton
-                label={tracker.status === 'tracking' ? t('pause') : t('resume')}
-                onPress={tracker.status === 'tracking' ? tracker.pause : tracker.resume}
-                variant="secondary"
-                flex={1}
-              />
-              <PillButton label={t('finishAndSave')} onPress={tracker.finish} variant="danger" flex={1} />
-            </View>
+            <>
+              <View style={styles.controls}>
+                <PillButton
+                  label={tracker.status === 'tracking' ? t('pause') : t('resume')}
+                  onPress={tracker.status === 'tracking' ? tracker.pause : tracker.resume}
+                  variant="secondary"
+                  flex={1}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('holdToFinish')}
+                  delayLongPress={700}
+                  onLongPress={() => void finish()}
+                  style={styles.finishButton}
+                >
+                  <Text style={styles.finishText}>{t('holdToFinish')}</Text>
+                </Pressable>
+              </View>
+              {tracker.recovered ? (
+                <PillButton label={t('discardSession')} onPress={tracker.discard} variant="ghost" />
+              ) : null}
+            </>
           )}
-
-          {tracker.status === 'finished' ? <Text style={styles.savedText}>{t('savedLocally')}</Text> : null}
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
+function SmallMetric({ icon, label, value, color }: { icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; label: string; value: string; color?: string }) {
+  return (
+    <GlassCard style={styles.smallCard}>
+      <IconBadge name={icon} size={28} color={color} />
+      <MonoValue size={17} color={color}>{value}</MonoValue>
+      <Label>{label}</Label>
+    </GlassCard>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
-  safeArea: { flex: 1 },
-  container: { padding: spacing.md, gap: spacing.sm },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },
-  orbHero: { alignItems: 'center', justifyContent: 'center', marginVertical: spacing.xs },
-  headerTitle: {
-    fontFamily: fontFamily.headline,
-    fontSize: 19,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  recordingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textFaint },
-  statusDotPaused: { backgroundColor: colors.secondary },
-  modeSwitch: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceHigh,
-    borderRadius: radius.full,
-    padding: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeButton: { flex: 1, paddingVertical: 8, borderRadius: radius.full, alignItems: 'center' },
-  modeButtonActive: { backgroundColor: colors.primary },
-  modeButtonText: { fontFamily: fontFamily.monoLabel, fontSize: 12, color: colors.textMuted },
-  modeButtonTextActive: { color: colors.onPrimary },
-  gpsRow: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surfaceLow,
-    borderRadius: radius.md,
-  },
-  permissionText: { color: colors.secondary, fontFamily: fontFamily.bodyMedium, fontSize: 13 },
-  heroContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  metricLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 4 },
-  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 4 },
-  heroUnit: { fontFamily: fontFamily.headline, fontSize: 18, color: colors.primary },
-  goalText: { fontFamily: fontFamily.monoLabel, fontSize: 10, color: colors.textFaint, marginTop: 6, letterSpacing: 0.5 },
-  metricUnit: { fontFamily: fontFamily.monoLabel, fontSize: 11, color: colors.textMuted },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  halfCard: { flex: 1 },
-  spacer: { height: spacing.sm },
-  controlsRow: { flexDirection: 'row', gap: spacing.sm },
-  savedText: { color: colors.primary, textAlign: 'center', marginTop: spacing.sm, fontFamily: fontFamily.bodyMedium },
+  safe: { flex: 1 },
+  loading: { flex: 1, backgroundColor: colors.canvas, alignItems: 'center', justifyContent: 'center' },
+  content: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eyebrow: { color: colors.primary, fontFamily: fontFamily.monoLabel, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
+  title: { color: colors.text, fontFamily: fontFamily.display, fontSize: 28 },
+  gpsChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: colors.surfaceHigh },
+  gpsChipReady: { backgroundColor: 'rgba(83,242,129,0.12)' },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.warning },
+  dotReady: { backgroundColor: colors.primary },
+  gpsText: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 11 },
+  modeSwitch: { flexDirection: 'row', gap: spacing.sm },
+  modeButton: { flex: 1, minHeight: 68, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSolid, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  modeButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  modeText: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 15 },
+  modeTextActive: { color: colors.onPrimary },
+  recovered: { color: colors.warning, fontFamily: fontFamily.bodySemiBold },
+  warning: { color: colors.danger, fontFamily: fontFamily.bodyMedium },
+  timerBlock: { alignItems: 'center', gap: 2, paddingVertical: spacing.sm },
+  primaryMetrics: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceSolid, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.lg },
+  metricHero: { flex: 1, alignItems: 'center' },
+  divider: { width: 1, height: 66, backgroundColor: colors.border },
+  unit: { color: colors.primary, fontFamily: fontFamily.monoLabel, fontSize: 11, marginBottom: 5 },
+  routeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionTitle: { color: colors.text, fontFamily: fontFamily.headline, fontSize: 17 },
+  routeMeta: { color: colors.textFaint, fontFamily: fontFamily.monoLabel, fontSize: 10 },
+  mapWrap: { height: 210, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  secondaryMetrics: { flexDirection: 'row', gap: spacing.sm },
+  smallCard: { flex: 1 },
+  controls: { flexDirection: 'row', gap: spacing.sm },
+  finishButton: { flex: 1, minHeight: 50, backgroundColor: 'rgba(255,107,107,0.14)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,107,107,0.4)', alignItems: 'center', justifyContent: 'center' },
+  finishText: { color: colors.danger, fontFamily: fontFamily.monoLabel, fontSize: 12, textTransform: 'uppercase' },
+  muted: { color: colors.textMuted, fontFamily: fontFamily.body },
 });

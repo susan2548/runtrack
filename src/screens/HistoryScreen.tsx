@@ -10,9 +10,10 @@ import { HudGridBackground } from '../components/HudGridBackground';
 import { IconBadge } from '../components/IconBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { Activity } from '../types';
-import type { HistoryStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../navigation/types';
+import type { ActivityType } from '../types';
 
-type Props = NativeStackScreenProps<HistoryStackParamList, 'HistoryList'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
 const MAX_STAGGER_MS = 320;
 
@@ -20,6 +21,8 @@ export default function HistoryScreen({ navigation }: Props) {
   const { t } = useLanguage();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
+  const [recentOnly, setRecentOnly] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,6 +45,12 @@ export default function HistoryScreen({ navigation }: Props) {
     () => activities.reduce((sum, a) => sum + a.total_distance, 0),
     [activities]
   );
+  const visibleActivities = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return activities.filter((activity) =>
+      (typeFilter === 'all' || activity.type === typeFilter) && (!recentOnly || activity.start_time >= cutoff)
+    );
+  }, [activities, recentOnly, typeFilter]);
 
   return (
     <View style={styles.root}>
@@ -71,8 +80,21 @@ export default function HistoryScreen({ navigation }: Props) {
           </GlassCard>
         ) : null}
 
+        <View style={styles.filters}>
+          {(['all', 'running', 'cycling'] as const).map((filter) => (
+            <Pressable key={filter} onPress={() => setTypeFilter(filter)} style={[styles.filterChip, typeFilter === filter && styles.filterChipActive]}>
+              <Text style={[styles.filterText, typeFilter === filter && styles.filterTextActive]}>
+                {filter === 'all' ? t('all') : filter === 'running' ? t('modeRun') : t('modeCycle')}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={() => setRecentOnly((value) => !value)} style={[styles.filterChip, recentOnly && styles.filterChipActive]}>
+            <Text style={[styles.filterText, recentOnly && styles.filterTextActive]}>{t('last30Days')}</Text>
+          </Pressable>
+        </View>
+
         <FlatList
-          data={activities}
+          data={visibleActivities}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={!loading ? <Text style={styles.emptyText}>{t('historyEmpty')}</Text> : null}
@@ -104,7 +126,7 @@ export default function HistoryScreen({ navigation }: Props) {
                   />
                   <Stat label={t('avg')} value={`${formatSpeedKmh(item.avg_speed)} km/h`} />
                 </View>
-                {item.synced === 0 ? <Badge tone="secondary">{t('pendingSync')}</Badge> : null}
+                {item.sync_state !== 'synced' ? <Badge tone="secondary">{t('pendingSync')}</Badge> : null}
               </GlassCard>
             </Pressable>
           )}
@@ -151,6 +173,11 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, paddingBottom: spacing.xs },
   title: { fontFamily: fontFamily.headline, fontSize: 20, color: colors.text },
   summaryCard: { marginHorizontal: spacing.md, marginBottom: spacing.sm },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
+  filterChip: { borderRadius: 999, backgroundColor: colors.surfaceHigh, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: colors.border },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 12 },
+  filterTextActive: { color: colors.onPrimary },
   summaryRow: { flexDirection: 'row', alignItems: 'center' },
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   summaryDivider: { width: 1, height: 36, backgroundColor: colors.border, marginHorizontal: spacing.sm },

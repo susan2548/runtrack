@@ -1,21 +1,32 @@
 export const CREATE_TABLES_SQL = `
 PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS activities (
   id TEXT PRIMARY KEY NOT NULL,
   type TEXT NOT NULL,
+  title TEXT,
+  notes TEXT,
   start_time INTEGER NOT NULL,
   end_time INTEGER,
+  moving_time_ms INTEGER NOT NULL DEFAULT 0,
+  paused_duration_ms INTEGER NOT NULL DEFAULT 0,
   total_distance REAL NOT NULL DEFAULT 0,
   avg_speed REAL NOT NULL DEFAULT 0,
   max_speed REAL NOT NULL DEFAULT 0,
   calories_burned REAL NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
   synced INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS location_points (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  point_key TEXT,
   activity_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL DEFAULT 0,
+  segment INTEGER NOT NULL DEFAULT 0,
   latitude REAL NOT NULL,
   longitude REAL NOT NULL,
   timestamp INTEGER NOT NULL,
@@ -23,23 +34,63 @@ CREATE TABLE IF NOT EXISTS location_points (
   FOREIGN KEY (activity_id) REFERENCES activities (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_location_points_activity
-  ON location_points (activity_id);
+CREATE INDEX IF NOT EXISTS idx_location_points_activity ON location_points (activity_id);
 
--- Single-row-per-key store used to hand the active activity id to the
--- background location task, which runs independently of the React tree.
+CREATE TABLE IF NOT EXISTS splits (
+  id TEXT PRIMARY KEY NOT NULL,
+  activity_id TEXT NOT NULL,
+  split_index INTEGER NOT NULL,
+  distance_meters REAL NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  avg_speed REAL NOT NULL,
+  updated_at INTEGER NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'pending',
+  FOREIGN KEY (activity_id) REFERENCES activities (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_splits_activity ON splits (activity_id);
+
+CREATE TABLE IF NOT EXISTS goals (
+  id TEXT PRIMARY KEY NOT NULL,
+  activity_type TEXT NOT NULL UNIQUE,
+  weekly_distance_meters REAL NOT NULL,
+  updated_at INTEGER NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'pending'
+);
+
 CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT
 );
 
--- Single-row table (id is always 1): local device profile used for calorie
--- calculation and mirrored to the backend "profiles" table once signed in.
 CREATE TABLE IF NOT EXISTS profile (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   weight_kg REAL NOT NULL DEFAULT 65,
   display_name TEXT,
   user_id TEXT,
-  updated_at INTEGER
+  onboarding_completed INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER,
+  sync_state TEXT NOT NULL DEFAULT 'pending'
 );
 `;
+
+export const ACTIVITY_COLUMNS: Record<string, string> = {
+  title: 'TEXT',
+  notes: 'TEXT',
+  moving_time_ms: 'INTEGER NOT NULL DEFAULT 0',
+  paused_duration_ms: 'INTEGER NOT NULL DEFAULT 0',
+  updated_at: 'INTEGER NOT NULL DEFAULT 0',
+  deleted_at: 'INTEGER',
+  sync_state: "TEXT NOT NULL DEFAULT 'pending'",
+};
+
+export const LOCATION_COLUMNS: Record<string, string> = {
+  point_key: 'TEXT',
+  sequence: 'INTEGER NOT NULL DEFAULT 0',
+  segment: 'INTEGER NOT NULL DEFAULT 0',
+};
+
+export const PROFILE_COLUMNS: Record<string, string> = {
+  onboarding_completed: 'INTEGER NOT NULL DEFAULT 0',
+  sync_state: "TEXT NOT NULL DEFAULT 'pending'",
+};

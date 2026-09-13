@@ -1,33 +1,73 @@
 export type ActivityType = 'running' | 'cycling';
+export type SyncState = 'pending' | 'synced' | 'error';
 
 export interface Activity {
   id: string;
   type: ActivityType;
+  title: string | null;
+  notes: string | null;
   start_time: number;
   end_time: number | null;
-  total_distance: number; // meters
-  avg_speed: number; // meters/second
-  max_speed: number; // meters/second
-  calories_burned: number; // kcal
-  synced: number; // 0 = not synced, 1 = synced (SQLite has no boolean type)
+  moving_time_ms: number;
+  paused_duration_ms: number;
+  total_distance: number;
+  avg_speed: number;
+  max_speed: number;
+  calories_burned: number;
+  updated_at: number;
+  deleted_at: number | null;
+  sync_state: SyncState;
 }
 
 export interface LocationPoint {
   id?: number;
+  point_key: string;
   activity_id: string;
+  sequence: number;
+  segment: number;
   latitude: number;
   longitude: number;
-  timestamp: number; // ms epoch
-  accuracy: number | null; // meters
+  timestamp: number;
+  accuracy: number | null;
+}
+
+export interface Split {
+  id: string;
+  activity_id: string;
+  split_index: number;
+  distance_meters: number;
+  duration_ms: number;
+  avg_speed: number;
+  updated_at: number;
+  sync_state: SyncState;
+}
+
+export interface Goal {
+  id: string;
+  activity_type: ActivityType;
+  weekly_distance_meters: number;
+  updated_at: number;
+  sync_state: SyncState;
 }
 
 export type TrackerStatus = 'idle' | 'tracking' | 'paused' | 'finished';
+
+export interface ActiveSessionSnapshot {
+  activityId: string;
+  activityType: ActivityType;
+  startedAt: number;
+  pausedAccumulatedMs: number;
+  pausedAt: number | null;
+  segment: number;
+  status: 'tracking' | 'paused';
+}
 
 export interface Profile {
   id: 1;
   weight_kg: number;
   display_name: string | null;
   user_id: string | null;
+  onboarding_completed: number;
   updated_at: number | null;
+  sync_state: SyncState;
 }
-
