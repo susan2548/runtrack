@@ -3,24 +3,23 @@
     "name": "RunTrackerApp",
     "slug": "RunTrackerApp",
     "version": "1.0.0",
+    "scheme": "runtracker",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/runtracker-icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#070A09",
+        "foregroundImage": "./assets/runtracker-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.runtrackerapp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/runtracker-icon.png"
     },
     "plugins": [
       "expo-sqlite",

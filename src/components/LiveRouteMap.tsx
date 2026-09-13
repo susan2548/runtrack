@@ -4,6 +4,7 @@ import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamily, radius } from '../theme/theme';
 import type { LocationPoint, MapCoordinate } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface LiveRouteMapProps {
   points: LocationPoint[];
@@ -14,6 +15,7 @@ interface LiveRouteMapProps {
 const FALLBACK = { latitude: 13.7563, longitude: 100.5018 };
 
 export function LiveRouteMap({ points, plannedPoints = [], accuracyMeters }: LiveRouteMapProps) {
+  const { t } = useLanguage();
   const mapRef = useRef<MapView>(null);
   const [followUser, setFollowUser] = useState(true);
   const coordinates = points.map((point) => ({ latitude: point.latitude, longitude: point.longitude }));
@@ -56,6 +58,13 @@ export function LiveRouteMap({ points, plannedPoints = [], accuracyMeters }: Liv
         {plannedPoints.length > 1 ? (
           <Polyline coordinates={plannedPoints} strokeColor={colors.secondary} strokeWidth={4} lineDashPattern={[10, 7]} />
         ) : null}
+        {plannedPoints.map((point, index) => {
+          const isStart = index === 0;
+          const isFinish = index === plannedPoints.length - 1;
+          const title = isStart ? t('startPoint') : isFinish ? t('finishPoint') : `${t('waypoint')} ${index}`;
+          const pinColor = isStart ? colors.secondary : isFinish ? colors.primary : colors.tertiary;
+          return <Marker key={`planned-${index}`} coordinate={point} title={title} pinColor={pinColor} />;
+        })}
         {coordinates.length > 1 ? (
           <>
             <Polyline coordinates={coordinates} strokeColor="rgba(83,242,129,0.22)" strokeWidth={10} />

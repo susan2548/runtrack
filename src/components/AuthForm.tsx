@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { signIn, signUp } from '../services/authService';
+import { resendConfirmation, signIn, signUp } from '../services/authService';
 import type { AuthErrorCode, AuthResult } from '../services/authService';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -16,6 +16,7 @@ export default function AuthForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   const errorMessage = (result: AuthResult) => {
     const messages: Partial<Record<AuthErrorCode, string>> = {
@@ -34,6 +35,7 @@ export default function AuthForm() {
     setMode(nextMode);
     setPassword('');
     setFeedback(null);
+    setAwaitingConfirmation(false);
   };
 
   const submit = async () => {
@@ -55,12 +57,23 @@ export default function AuthForm() {
         setFeedback({ kind: 'error', text: errorMessage(result) });
       } else if (mode === 'signUp' && result.needsEmailConfirmation) {
         setFeedback({ kind: 'success', text: t('authCheckEmail') });
+        setAwaitingConfirmation(true);
       } else if (mode === 'signUp') {
         setFeedback({ kind: 'success', text: t('authSignedUpAndIn') });
       }
     } finally {
       setBusy(false);
     }
+  };
+
+  const resend = async () => {
+    if (busy || !email.trim()) return;
+    setBusy(true);
+    const result = await resendConfirmation(email);
+    setFeedback(result.ok
+      ? { kind: 'success', text: t('authConfirmationResent') }
+      : { kind: 'error', text: errorMessage(result) });
+    setBusy(false);
   };
 
   return (
@@ -147,6 +160,12 @@ export default function AuthForm() {
         </View>
       ) : null}
 
+      {mode === 'signUp' && awaitingConfirmation ? (
+        <Pressable accessibilityRole="button" disabled={busy} onPress={() => void resend()} style={styles.resendButton}>
+          <Text style={styles.resendText}>{t('authResendConfirmation')}</Text>
+        </Pressable>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={mode === 'signIn' ? t('signIn') : t('signUp')}
@@ -225,4 +244,6 @@ const styles = StyleSheet.create({
   },
   submitButtonPressed: { opacity: 0.72 },
   submitButtonText: { color: colors.onPrimary, fontFamily: fontFamily.monoLabel, letterSpacing: 0.5 },
+  resendButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  resendText: { color: colors.tertiary, fontFamily: fontFamily.bodySemiBold, fontSize: 13 },
 });

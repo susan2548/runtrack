@@ -11,6 +11,7 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<RootTabParamList> | undefined;
   History: undefined;
   ActivityDetail: { activityId: string };
+  ActivityReplay: { activityId: string };
   ActivityEditor: { activityId: string; afterFinish: boolean };
   Heatmap: undefined;
   RoutePlanner: undefined;

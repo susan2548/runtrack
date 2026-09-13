@@ -143,6 +143,11 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
           </View>
         ) : null}
 
+        {coordinates.length > 1 ? (
+          <View style={styles.replayAction}>
+            <PillButton label={t('watchRouteReplay')} onPress={() => navigation.navigate('ActivityReplay', { activityId })} variant="secondary" />
+          </View>
+        ) : null}
         <View style={styles.actionsRow}>
           <PillButton label={t('shareActivity')} onPress={handleShare} variant="primary" flex={1} />
           <PillButton label={t('editActivity')} onPress={() => navigation.navigate('ActivityEditor', { activityId, afterFinish: false })} variant="secondary" flex={1} />
@@ -199,4 +204,5 @@ const styles = StyleSheet.create({
   splitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
   splitDistance: { color: colors.textMuted, fontFamily: fontFamily.body },
   actionsRow: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
+  replayAction: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
 });

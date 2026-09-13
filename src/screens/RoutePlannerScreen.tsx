@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -24,6 +24,7 @@ export default function RoutePlannerScreen() {
   const [points, setPoints] = useState<MapCoordinate[]>([]);
   const [plans, setPlans] = useState<RoutePlan[]>([]);
   const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null);
+  const [routeName, setRouteName] = useState('');
   const distance = calculateRouteDistance(points);
 
   const refresh = useCallback(() => getRoutePlans().then(setPlans), []);
@@ -47,8 +48,10 @@ export default function RoutePlannerScreen() {
       return;
     }
     const id = generateId();
-    await saveRoutePlan(id, `${t('routeDefaultName')} ${plans.length + 1}`, distance, points);
+    const fallbackName = `${t('routeDefaultName')} ${plans.length + 1}`;
+    await saveRoutePlan(id, routeName.trim() || fallbackName, distance, points);
     setPoints([]);
+    setRouteName('');
     await refresh();
   };
 
@@ -75,6 +78,20 @@ export default function RoutePlannerScreen() {
             </View>
           </View>
           <MapSetupHelp />
+
+          <View style={styles.nameGroup}>
+            <Text style={styles.nameLabel}>{t('routeName')}</Text>
+            <TextInput
+              accessibilityLabel={t('routeName')}
+              value={routeName}
+              onChangeText={setRouteName}
+              placeholder={t('routeNamePlaceholder')}
+              placeholderTextColor={colors.textFaint}
+              maxLength={50}
+              returnKeyType="done"
+              style={styles.nameInput}
+            />
+          </View>
 
           <View style={styles.actions}>
             <MiniAction icon="locate-outline" label={t('startHere')} disabled={!currentLocation} onPress={() => currentLocation && setPoints((current) => current.length ? current : [currentLocation])} />
@@ -124,6 +141,9 @@ const styles = StyleSheet.create({
   mapWrap: { height: 390, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   distanceBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'baseline', gap: 5, backgroundColor: 'rgba(7,10,9,0.88)', borderRadius: radius.full, paddingHorizontal: 13, paddingVertical: 8 },
   actions: { flexDirection: 'row', gap: spacing.sm },
+  nameGroup: { gap: 6 },
+  nameLabel: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 12 },
+  nameInput: { minHeight: 52, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSolid, color: colors.text, fontFamily: fontFamily.body, fontSize: 16, paddingHorizontal: 16, paddingVertical: 12 },
   miniAction: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: colors.surfaceSolid, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
   miniLabel: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 11 },
   disabled: { opacity: 0.4 },

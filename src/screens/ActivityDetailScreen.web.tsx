@@ -91,6 +91,7 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
         </View>
 
         <View style={styles.actionsRow}>
+          <PillButton label={t('watchRouteReplay')} onPress={() => navigation.navigate('ActivityReplay', { activityId })} variant="ghost" flex={1} />
           <PillButton label={t('shareActivity')} onPress={handleShare} variant="primary" flex={1} />
           <PillButton label={t('delete')} onPress={handleDelete} variant="secondary" flex={1} />
         </View>
