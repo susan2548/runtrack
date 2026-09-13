@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateStreak, isUsablePoint, startOfWeek, summarizeActivityPoints } from '../src/utils/activityMetrics';
+import {
+  calculateRouteDistance,
+  calculateStreak,
+  distanceToRouteMeters,
+  isUsablePoint,
+  startOfWeek,
+  summarizeActivityPoints,
+} from '../src/utils/activityMetrics';
 import type { LocationPoint } from '../src/types';
 
 function point(index: number, overrides: Partial<LocationPoint> = {}): LocationPoint {
@@ -64,4 +71,24 @@ test('week starts on Monday', () => {
   const monday = new Date(startOfWeek());
   assert.equal(monday.getDay(), 1);
   assert.equal(monday.getHours(), 0);
+});
+
+test('planned route distance sums each segment', () => {
+  const distance = calculateRouteDistance([
+    { latitude: 13.7563, longitude: 100.5018 },
+    { latitude: 13.7653, longitude: 100.5018 },
+    { latitude: 13.7743, longitude: 100.5018 },
+  ]);
+  assert.ok(distance > 1900 && distance < 2100);
+});
+
+test('distance to planned route measures the nearest segment', () => {
+  const distance = distanceToRouteMeters(
+    { latitude: 13.75675, longitude: 100.505 },
+    [
+      { latitude: 13.7563, longitude: 100.5 },
+      { latitude: 13.7572, longitude: 100.5 },
+    ]
+  );
+  assert.ok(distance > 500 && distance < 600);
 });

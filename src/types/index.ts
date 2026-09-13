@@ -17,6 +17,7 @@ export interface Activity {
   updated_at: number;
   deleted_at: number | null;
   sync_state: SyncState;
+  route_plan_id: string | null;
 }
 
 export interface LocationPoint {
@@ -60,6 +61,30 @@ export interface ActiveSessionSnapshot {
   pausedAt: number | null;
   segment: number;
   status: 'tracking' | 'paused';
+  routePlanId: string | null;
+}
+
+export interface MapCoordinate {
+  latitude: number;
+  longitude: number;
+}
+
+export interface RouteWaypoint extends MapCoordinate {
+  id: string;
+  route_plan_id: string;
+  sequence: number;
+}
+
+export interface RoutePlan {
+  id: string;
+  name: string;
+  distance_meters: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface RoutePlanWithWaypoints extends RoutePlan {
+  waypoints: RouteWaypoint[];
 }
 
 export interface Profile {

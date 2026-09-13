@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { HudGridBackground } from '../components/HudGridBackground';
 import { getProfile, setWeightKg } from '../db/profileRepository';
 import { clearActivityData, getAllActivities } from '../db/activityRepository';
 import { getGoals, upsertGoal } from '../db/goalRepository';
@@ -10,46 +10,42 @@ import { useAutoSync } from '../hooks/useAutoSync';
 import { signOut } from '../services/authService';
 import { isSupabaseConfigured } from '../services/supabaseClient';
 import AuthForm from '../components/AuthForm';
-import { colors, fontFamily, radius, spacing } from '../theme/theme';
+import { colors, fontFamily, spacing } from '../theme/theme';
 import { GlassCard, Label, PillButton, LanguageToggle } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import { shareText } from '../utils/share';
+import { NumberWheel } from '../components/NumberWheel';
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
   const { user, initializing } = useAuth();
   const { lastStatus, isSyncing, runSync } = useAutoSync(user?.id ?? null);
-  const [weightInput, setWeightInput] = useState('65');
+  const [weightInput, setWeightInput] = useState(65);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
-  const [runGoalInput, setRunGoalInput] = useState('15');
-  const [cycleGoalInput, setCycleGoalInput] = useState('50');
+  const [runGoalInput, setRunGoalInput] = useState(15);
+  const [cycleGoalInput, setCycleGoalInput] = useState(50);
 
   useFocusEffect(
     useCallback(() => {
       Promise.all([getProfile(), getGoals()]).then(([profile, goals]) => {
-        setWeightInput(String(profile.weight_kg));
+        setWeightInput(profile.weight_kg);
         const runGoal = goals.find((goal) => goal.activity_type === 'running');
         const cycleGoal = goals.find((goal) => goal.activity_type === 'cycling');
-        if (runGoal) setRunGoalInput(String(runGoal.weekly_distance_meters / 1000));
-        if (cycleGoal) setCycleGoalInput(String(cycleGoal.weekly_distance_meters / 1000));
+        if (runGoal) setRunGoalInput(runGoal.weekly_distance_meters / 1000);
+        if (cycleGoal) setCycleGoalInput(cycleGoal.weekly_distance_meters / 1000);
       });
     }, [])
   );
 
   const saveWeight = async () => {
-    const parsed = parseFloat(weightInput.replace(',', '.'));
-    if (Number.isNaN(parsed) || parsed <= 0 || parsed > 400) {
-      setSavedMessage(t('weightInvalid'));
-      return;
-    }
-    await setWeightKg(parsed);
+    await setWeightKg(weightInput);
     setSavedMessage(t('weightSaved'));
   };
 
   const saveGoals = async () => {
-    const run = Math.max(1, Number(runGoalInput.replace(',', '.')) || 15) * 1000;
-    const cycle = Math.max(1, Number(cycleGoalInput.replace(',', '.')) || 50) * 1000;
+    const run = runGoalInput * 1000;
+    const cycle = cycleGoalInput * 1000;
     await Promise.all([upsertGoal('running', run), upsertGoal('cycling', cycle)]);
     setSavedMessage(t('weightSaved'));
   };
@@ -86,9 +82,13 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      <HudGridBackground />
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           <View style={styles.header}>
             <IconBadge name="account-circle" set="mci" size={64} />
             <Text style={styles.title}>{t('profileTitle')}</Text>
@@ -101,17 +101,8 @@ export default function ProfileScreen() {
               <IconBadge name="scale-bathroom" set="mci" size={32} />
               <Label style={styles.cardTitleLabel}>{t('weightLabel')}</Label>
             </View>
-            <View style={styles.weightRow}>
-              <TextInput
-                style={styles.weightInput}
-                keyboardType="decimal-pad"
-                value={weightInput}
-                onChangeText={setWeightInput}
-              />
-              <Pressable style={styles.saveButton} onPress={saveWeight}>
-                <Text style={styles.saveButtonText}>{t('save')}</Text>
-              </Pressable>
-            </View>
+            <NumberWheel value={weightInput} onChange={setWeightInput} min={30} max={250} step={0.5} unit="KG" accessibilityLabel={t('weightLabel')} />
+            <PillButton label={t('save')} onPress={() => void saveWeight()} variant="secondary" />
             {savedMessage ? <Text style={styles.savedMessage}>{savedMessage}</Text> : null}
           </GlassCard>
 
@@ -120,8 +111,8 @@ export default function ProfileScreen() {
               <IconBadge name="target" set="mci" size={32} />
               <Label style={styles.cardTitleLabel}>{t('editGoals')}</Label>
             </View>
-            <GoalRow label={t('modeRun')} value={runGoalInput} onChange={setRunGoalInput} />
-            <GoalRow label={t('modeCycle')} value={cycleGoalInput} onChange={setCycleGoalInput} />
+            <GoalRow label={t('modeRun')} value={runGoalInput} onChange={setRunGoalInput} min={1} max={100} step={1} />
+            <GoalRow label={t('modeCycle')} value={cycleGoalInput} onChange={setCycleGoalInput} min={5} max={300} step={5} />
             <PillButton label={t('saveChanges')} onPress={() => void saveGoals()} variant="secondary" />
           </GlassCard>
 
@@ -163,12 +154,11 @@ export default function ProfileScreen() {
   );
 }
 
-function GoalRow({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function GoalRow({ label, value, onChange, min, max, step }: { label: string; value: number; onChange: (value: number) => void; min: number; max: number; step: number }) {
   return (
-    <View style={styles.goalRow}>
+    <View style={styles.goalGroup}>
       <Text style={styles.goalLabel}>{label}</Text>
-      <TextInput value={value} onChangeText={onChange} keyboardType="decimal-pad" style={styles.goalInput} />
-      <Text style={styles.goalUnit}>KM/WEEK</Text>
+      <NumberWheel value={value} onChange={onChange} min={min} max={max} step={step} unit="KM/WK" accessibilityLabel={label} />
     </View>
   );
 }
@@ -176,32 +166,16 @@ function GoalRow({ label, value, onChange }: { label: string; value: string; onC
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   safeArea: { flex: 1 },
-  content: { padding: spacing.md, gap: spacing.md },
+  content: { padding: spacing.md, paddingBottom: 120, gap: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { fontFamily: fontFamily.headline, fontSize: 20, color: colors.text },
   card: { gap: spacing.xs },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   cardTitleLabel: { flex: 1 },
-  weightRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  weightInput: {
-    flex: 1,
-    backgroundColor: colors.surfaceLow,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: colors.text,
-    fontFamily: fontFamily.mono,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  saveButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: 18, justifyContent: 'center' },
-  saveButtonText: { color: colors.onPrimary, fontFamily: fontFamily.monoLabel },
   savedMessage: { color: colors.primary, fontSize: 12, marginTop: spacing.xs, fontFamily: fontFamily.body },
   emailText: { color: colors.text, fontFamily: fontFamily.bodySemiBold, marginTop: spacing.xs },
   mutedText: { color: colors.textMuted, fontSize: 12, fontFamily: fontFamily.body, marginTop: 2 },
   actionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  goalRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceLow, borderRadius: radius.md, paddingHorizontal: spacing.sm },
-  goalLabel: { flex: 1, color: colors.text, fontFamily: fontFamily.bodySemiBold },
-  goalInput: { width: 70, color: colors.text, fontFamily: fontFamily.mono, fontSize: 17, paddingVertical: 10, textAlign: 'right' },
-  goalUnit: { color: colors.textFaint, fontFamily: fontFamily.monoLabel, fontSize: 9 },
+  goalGroup: { gap: spacing.xs },
+  goalLabel: { color: colors.text, fontFamily: fontFamily.bodySemiBold },
 });

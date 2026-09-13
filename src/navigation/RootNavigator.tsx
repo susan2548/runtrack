@@ -11,6 +11,7 @@ import HeatmapScreen from '../screens/HeatmapScreen';
 import StatsScreen from '../screens/StatsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import RoutePlannerScreen from '../screens/RoutePlannerScreen';
 import { colors, fontFamily } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useAppSetup } from '../onboarding/AppSetupContext';
@@ -71,6 +72,7 @@ export default function RootNavigator() {
       <Stack.Screen name="ActivityDetail" component={ActivityDetailScreen} options={{ title: t('activityDetailTitle') }} />
       <Stack.Screen name="ActivityEditor" component={ActivityEditorScreen} options={{ title: t('editActivity') }} />
       <Stack.Screen name="Heatmap" component={HeatmapScreen} options={{ title: t('routeHeatmap') }} />
+      <Stack.Screen name="RoutePlanner" component={RoutePlannerScreen} options={{ title: t('planRoute') }} />
     </Stack.Navigator>
   );
 }

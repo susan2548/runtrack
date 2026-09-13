@@ -3,16 +3,22 @@ import type { Activity, ActivityType, LocationPoint, SyncState } from '../types'
 
 const ACTIVE_ACTIVITY_KEY = 'active_activity_id';
 
-export async function createActivity(id: string, type: ActivityType, startTime: number): Promise<void> {
+export async function createActivity(
+  id: string,
+  type: ActivityType,
+  startTime: number,
+  routePlanId: string | null = null
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `INSERT INTO activities
-      (id, type, start_time, updated_at, sync_state)
-     VALUES (?, ?, ?, ?, 'pending')`,
+      (id, type, start_time, updated_at, sync_state, route_plan_id)
+     VALUES (?, ?, ?, ?, 'pending', ?)`,
     id,
     type,
     startTime,
-    startTime
+    startTime,
+    routePlanId
   );
   await db.runAsync(
     'INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)',
@@ -135,15 +141,17 @@ export async function upsertRemoteActivity(activity: Activity): Promise<void> {
   await db.runAsync(
     `INSERT INTO activities
       (id, type, title, notes, start_time, end_time, moving_time_ms, paused_duration_ms,
-       total_distance, avg_speed, max_speed, calories_burned, updated_at, deleted_at, sync_state, synced)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', 1)
+       total_distance, avg_speed, max_speed, calories_burned, updated_at, deleted_at,
+       route_plan_id, sync_state, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', 1)
      ON CONFLICT(id) DO UPDATE SET
        type=excluded.type, title=excluded.title, notes=excluded.notes, start_time=excluded.start_time,
        end_time=excluded.end_time, moving_time_ms=excluded.moving_time_ms,
        paused_duration_ms=excluded.paused_duration_ms, total_distance=excluded.total_distance,
        avg_speed=excluded.avg_speed, max_speed=excluded.max_speed,
        calories_burned=excluded.calories_burned, updated_at=excluded.updated_at,
-       deleted_at=excluded.deleted_at, sync_state='synced', synced=1`,
+       deleted_at=excluded.deleted_at, route_plan_id=excluded.route_plan_id,
+       sync_state='synced', synced=1`,
     activity.id,
     activity.type,
     activity.title,
@@ -157,7 +165,8 @@ export async function upsertRemoteActivity(activity: Activity): Promise<void> {
     activity.max_speed,
     activity.calories_burned,
     activity.updated_at,
-    activity.deleted_at
+    activity.deleted_at,
+    activity.route_plan_id
   );
 }
 

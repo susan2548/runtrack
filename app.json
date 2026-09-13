@@ -17,7 +17,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.runtrackerapp.mobile"
+      "package": "com.runtrackerapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Heatmap, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getAllLocationPoints } from '../db/activityRepository';

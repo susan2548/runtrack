@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HudGridBackground } from '../components/HudGridBackground';
 import { deleteActivity, getActivityById } from '../db/activityRepository';

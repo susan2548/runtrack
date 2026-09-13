@@ -56,10 +56,10 @@ export const fontFamily = {
 } as const;
 
 export const radius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  sm: 6,
+  md: 10,
+  lg: 16,
+  xl: 22,
   full: 999,
 } as const;
 

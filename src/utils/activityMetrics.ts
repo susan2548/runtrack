@@ -1,9 +1,10 @@
 import { caloriesForSlice, getMetValue } from '../constants/met';
-import type { ActivityType, LocationPoint, Split } from '../types';
+import type { ActivityType, LocationPoint, MapCoordinate, Split } from '../types';
 import { haversineMeters } from './geo';
 
 export const MAX_GPS_ACCURACY_METERS = 50;
 export const SPLIT_DISTANCE_METERS = 1000;
+export const OFF_ROUTE_THRESHOLD_METERS = 80;
 const MAX_SAMPLE_GAP_MS = 30_000;
 
 const MAX_SPEED_MS: Record<ActivityType, number> = {
@@ -13,6 +14,48 @@ const MAX_SPEED_MS: Record<ActivityType, number> = {
 
 export function isUsablePoint(point: LocationPoint) {
   return point.accuracy === null || point.accuracy <= MAX_GPS_ACCURACY_METERS;
+}
+
+export function calculateRouteDistance(points: MapCoordinate[]): number {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    total += haversineMeters(
+      points[index - 1].latitude,
+      points[index - 1].longitude,
+      points[index].latitude,
+      points[index].longitude
+    );
+  }
+  return total;
+}
+
+/** Approximate point-to-polyline distance using a local equirectangular projection. */
+export function distanceToRouteMeters(point: MapCoordinate, route: MapCoordinate[]): number {
+  if (!route.length) return Number.POSITIVE_INFINITY;
+  if (route.length === 1) {
+    return haversineMeters(point.latitude, point.longitude, route[0].latitude, route[0].longitude);
+  }
+  const earthRadius = 6_371_000;
+  const referenceLatitude = (point.latitude * Math.PI) / 180;
+  const project = (coordinate: MapCoordinate) => ({
+    x: ((coordinate.longitude - point.longitude) * Math.PI / 180) * earthRadius * Math.cos(referenceLatitude),
+    y: ((coordinate.latitude - point.latitude) * Math.PI / 180) * earthRadius,
+  });
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < route.length; index += 1) {
+    const start = project(route[index - 1]);
+    const end = project(route[index]);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const projection = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, -(start.x * dx + start.y * dy) / lengthSquared));
+    const closestX = start.x + projection * dx;
+    const closestY = start.y + projection * dy;
+    minimum = Math.min(minimum, Math.hypot(closestX, closestY));
+  }
+  return minimum;
 }
 
 export interface ActivitySummary {

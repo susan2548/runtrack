@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, radius } from '../theme/theme';
-import type { LocationPoint } from '../types';
+import type { LocationPoint, MapCoordinate } from '../types';
 
-export function LiveRouteMap({ points }: { points: LocationPoint[] }) {
+export function LiveRouteMap({ points, plannedPoints = [] }: { points: LocationPoint[]; plannedPoints?: MapCoordinate[]; accuracyMeters?: number | null }) {
   return (
     <View style={styles.empty}>
-      <Text style={styles.text}>{points.length ? `${points.length} GPS points` : 'Live map is available on Android'}</Text>
+      <Text style={styles.text}>{points.length ? `${points.length} live GPS points` : plannedPoints.length ? `${plannedPoints.length} planned waypoints` : 'Live map is available on Android'}</Text>
     </View>
   );
 }

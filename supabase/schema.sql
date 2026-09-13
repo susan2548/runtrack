@@ -14,7 +14,8 @@ create table if not exists public.activities (
   max_speed double precision not null default 0,
   calories_burned double precision not null default 0,
   updated_at bigint not null,
-  deleted_at bigint
+  deleted_at bigint,
+  route_plan_id text
 );
 
 create table if not exists public.location_points (
@@ -65,6 +66,7 @@ alter table public.activities add column if not exists moving_time_ms bigint not
 alter table public.activities add column if not exists paused_duration_ms bigint not null default 0;
 alter table public.activities add column if not exists updated_at bigint;
 alter table public.activities add column if not exists deleted_at bigint;
+alter table public.activities add column if not exists route_plan_id text;
 update public.activities set updated_at = coalesce(updated_at, start_time) where updated_at is null;
 alter table public.activities alter column updated_at set not null;
 

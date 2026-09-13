@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS activities (
   updated_at INTEGER NOT NULL DEFAULT 0,
   deleted_at INTEGER,
   sync_state TEXT NOT NULL DEFAULT 'pending',
+  route_plan_id TEXT,
   synced INTEGER NOT NULL DEFAULT 0
 );
 
@@ -58,6 +59,26 @@ CREATE TABLE IF NOT EXISTS goals (
   sync_state TEXT NOT NULL DEFAULT 'pending'
 );
 
+CREATE TABLE IF NOT EXISTS route_plans (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  distance_meters REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS route_waypoints (
+  id TEXT PRIMARY KEY NOT NULL,
+  route_plan_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  latitude REAL NOT NULL,
+  longitude REAL NOT NULL,
+  FOREIGN KEY (route_plan_id) REFERENCES route_plans (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_route_waypoints_plan
+  ON route_waypoints (route_plan_id, sequence);
+
 CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT
@@ -82,6 +103,7 @@ export const ACTIVITY_COLUMNS: Record<string, string> = {
   updated_at: 'INTEGER NOT NULL DEFAULT 0',
   deleted_at: 'INTEGER',
   sync_state: "TEXT NOT NULL DEFAULT 'pending'",
+  route_plan_id: 'TEXT',
 };
 
 export const LOCATION_COLUMNS: Record<string, string> = {

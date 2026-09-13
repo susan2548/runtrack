@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { HudGridBackground } from '../components/HudGridBackground';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   deleteActivity,
@@ -40,7 +40,6 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
   if (!activity) {
     return (
       <View style={styles.root}>
-        <HudGridBackground />
         <SafeAreaView style={styles.safeArea}>
           <Text style={styles.loadingText}>{t('detailLoading')}</Text>
         </SafeAreaView>
@@ -78,7 +77,6 @@ export default function ActivityDetailScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <HudGridBackground />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.mapContainer}>

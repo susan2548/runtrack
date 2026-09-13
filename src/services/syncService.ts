@@ -22,7 +22,8 @@ export type SyncStatus =
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function toRemoteActivity(activity: Activity, userId: string) {
-  return { ...activity, user_id: userId, sync_state: undefined };
+  const payload = { ...activity, user_id: userId, sync_state: undefined, route_plan_id: undefined };
+  return payload;
 }
 
 function fromRemoteActivity(row: Record<string, unknown>): Activity {
@@ -42,6 +43,7 @@ function fromRemoteActivity(row: Record<string, unknown>): Activity {
     updated_at: Number(row.updated_at ?? 0),
     deleted_at: row.deleted_at === null ? null : Number(row.deleted_at),
     sync_state: 'synced',
+    route_plan_id: (row.route_plan_id as string | null) ?? null,
   };
 }
 
@@ -101,6 +103,7 @@ async function pullRemote(userId: string): Promise<number> {
 async function pushActivity(activity: Activity, userId: string) {
   const payload = toRemoteActivity(activity, userId);
   delete (payload as { sync_state?: unknown }).sync_state;
+  delete (payload as { route_plan_id?: unknown }).route_plan_id;
   const { error } = await supabase.from('activities').upsert(payload);
   if (error) throw error;
   if (!activity.deleted_at) {

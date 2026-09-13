@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { completeOnboarding } from '../db/profileRepository';
 import { upsertGoal } from '../db/goalRepository';
@@ -9,22 +10,22 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { IconBadge } from '../components/IconBadge';
 import { LanguageToggle, PillButton } from '../components/ui';
+import { NumberWheel } from '../components/NumberWheel';
 
 export default function OnboardingScreen() {
   const { t } = useLanguage();
   const { refresh } = useAppSetup();
   const [step, setStep] = useState(0);
-  const [weight, setWeight] = useState('65');
-  const [runGoal, setRunGoal] = useState('15');
-  const [cycleGoal, setCycleGoal] = useState('50');
+  const [weight, setWeight] = useState(65);
+  const [runGoal, setRunGoal] = useState(15);
+  const [cycleGoal, setCycleGoal] = useState(50);
 
   const finish = async (requestLocation: boolean) => {
     if (requestLocation) await ensureForegroundLocationPermission();
-    const parsedWeight = Math.min(400, Math.max(30, Number(weight.replace(',', '.')) || 65));
     await Promise.all([
-      completeOnboarding(parsedWeight),
-      upsertGoal('running', Math.max(1, Number(runGoal.replace(',', '.')) || 15) * 1000),
-      upsertGoal('cycling', Math.max(1, Number(cycleGoal.replace(',', '.')) || 50) * 1000),
+      completeOnboarding(weight),
+      upsertGoal('running', runGoal * 1000),
+      upsertGoal('cycling', cycleGoal * 1000),
     ]);
     await refresh();
   };
@@ -58,16 +59,7 @@ export default function OnboardingScreen() {
               <Text style={styles.title}>{t('setupProfile')}</Text>
               <Text style={styles.body}>{t('setupProfileBody')}</Text>
               <Text style={styles.label}>{t('weightLabel')}</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                  accessibilityLabel={t('weightLabel')}
-                />
-                <Text style={styles.unit}>KG</Text>
-              </View>
+              <NumberWheel value={weight} onChange={setWeight} min={30} max={250} step={0.5} unit="KG" accessibilityLabel={t('weightLabel')} />
               <PillButton label={t('continue')} onPress={() => setStep(2)} />
             </View>
           ) : null}
@@ -77,8 +69,8 @@ export default function OnboardingScreen() {
               <IconBadge name="target" set="mci" size={64} />
               <Text style={styles.title}>{t('weeklyGoalTitle')}</Text>
               <Text style={styles.body}>{t('weeklyGoalBody')}</Text>
-              <GoalInput label={t('modeRun')} value={runGoal} onChange={setRunGoal} />
-              <GoalInput label={t('modeCycle')} value={cycleGoal} onChange={setCycleGoal} />
+              <GoalInput label={t('modeRun')} value={runGoal} onChange={setRunGoal} min={1} max={100} step={1} />
+              <GoalInput label={t('modeCycle')} value={cycleGoal} onChange={setCycleGoal} min={5} max={300} step={5} />
               <PillButton label={t('continue')} onPress={() => setStep(3)} />
             </View>
           ) : null}
@@ -98,14 +90,11 @@ export default function OnboardingScreen() {
   );
 }
 
-function GoalInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function GoalInput({ label, value, onChange, min, max, step }: { label: string; value: number; onChange: (value: number) => void; min: number; max: number; step: number }) {
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputRow}>
-        <TextInput value={value} onChangeText={onChange} keyboardType="decimal-pad" style={styles.input} />
-        <Text style={styles.unit}>KM / WEEK</Text>
-      </View>
+      <NumberWheel value={value} onChange={onChange} min={min} max={max} step={step} unit="KM/WK" accessibilityLabel={label} />
     </View>
   );
 }
@@ -125,7 +114,4 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontFamily: fontFamily.display, fontSize: 38, lineHeight: 43, maxWidth: 330 },
   body: { color: colors.textMuted, fontFamily: fontFamily.body, fontSize: 16, lineHeight: 24, marginBottom: spacing.md },
   label: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 13 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceSolid, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingRight: spacing.md },
-  input: { flex: 1, color: colors.text, fontFamily: fontFamily.mono, fontSize: 24, padding: spacing.md, minHeight: 58 },
-  unit: { color: colors.textMuted, fontFamily: fontFamily.monoLabel, fontSize: 11 },
 });

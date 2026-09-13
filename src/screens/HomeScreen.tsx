@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getAllActivities } from '../db/activityRepository';
@@ -73,6 +74,7 @@ export default function HomeScreen() {
           </GlassCard>
 
           <PillButton label={t('startActivity')} onPress={() => navigation.navigate('Main', { screen: 'Track' })} />
+          <PillButton label={t('planRoute')} onPress={() => navigation.navigate('RoutePlanner')} variant="secondary" />
 
           <View style={styles.metricsRow}>
             <GlassCard style={styles.metricCard}>

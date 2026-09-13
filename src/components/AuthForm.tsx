@@ -1,31 +1,65 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { signIn, signUp } from '../services/authService';
+import type { AuthErrorCode, AuthResult } from '../services/authService';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { useLanguage } from '../i18n/LanguageContext';
+
+type Feedback = { kind: 'error' | 'success'; text: string };
 
 export default function AuthForm() {
   const { t } = useLanguage();
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  const errorMessage = (result: AuthResult) => {
+    const messages: Partial<Record<AuthErrorCode, string>> = {
+      not_configured: t('authNotConfigured'),
+      invalid_credentials: t('authInvalidCredentials'),
+      email_not_confirmed: t('authEmailNotConfirmed'),
+      already_registered: t('authAlreadyRegistered'),
+      password_too_short: t('authPasswordTooShort'),
+      rate_limited: t('authRateLimited'),
+      network: t('authNetworkError'),
+    };
+    return (result.code && messages[result.code]) || result.error || t('authUnknownError');
+  };
+
+  const changeMode = (nextMode: 'signIn' | 'signUp') => {
+    setMode(nextMode);
+    setPassword('');
+    setFeedback(null);
+  };
 
   const submit = async () => {
-    if (!email || !password) {
-      setMessage(t('authMissingFields'));
+    if (busy) return;
+    if (!email.trim() || !password) {
+      setFeedback({ kind: 'error', text: t('authMissingFields') });
       return;
     }
-    setBusy(true);
-    setMessage(null);
-    const result = mode === 'signIn' ? await signIn(email, password) : await signUp(email, password);
-    setBusy(false);
+    if (password.length < 6) {
+      setFeedback({ kind: 'error', text: t('authPasswordTooShort') });
+      return;
+    }
 
-    if (!result.ok) {
-      setMessage(result.error ?? 'Something went wrong');
-    } else if (mode === 'signUp') {
-      setMessage(t('authSignUpSuccess'));
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const result = mode === 'signIn' ? await signIn(email, password) : await signUp(email, password);
+      if (!result.ok) {
+        setFeedback({ kind: 'error', text: errorMessage(result) });
+      } else if (mode === 'signUp' && result.needsEmailConfirmation) {
+        setFeedback({ kind: 'success', text: t('authCheckEmail') });
+      } else if (mode === 'signUp') {
+        setFeedback({ kind: 'success', text: t('authSignedUpAndIn') });
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -34,39 +68,92 @@ export default function AuthForm() {
       <View style={styles.tabRow}>
         <Pressable
           style={[styles.tab, mode === 'signIn' && styles.tabActive]}
-          onPress={() => setMode('signIn')}
+          onPress={() => changeMode('signIn')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === 'signIn' }}
         >
           <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>{t('signIn')}</Text>
         </Pressable>
         <Pressable
           style={[styles.tab, mode === 'signUp' && styles.tabActive]}
-          onPress={() => setMode('signUp')}
+          onPress={() => changeMode('signUp')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === 'signUp' }}
         >
           <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>{t('signUp')}</Text>
         </Pressable>
       </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder={t('email')}
-        placeholderTextColor={colors.textFaint}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('password')}
-        placeholderTextColor={colors.textFaint}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>{t('email')}</Text>
+        <View style={styles.inputShell}>
+          <Ionicons name="mail-outline" size={19} color={colors.textFaint} />
+          <TextInput
+            style={styles.input}
+            placeholder="name@example.com"
+            placeholderTextColor={colors.textFaint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            returnKeyType="next"
+            value={email}
+            onChangeText={setEmail}
+            editable={!busy}
+          />
+        </View>
+      </View>
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>{t('password')}</Text>
+        <View style={styles.inputShell}>
+          <Ionicons name="lock-closed-outline" size={19} color={colors.textFaint} />
+          <TextInput
+            style={styles.input}
+            placeholder={t('authPasswordHint')}
+            placeholderTextColor={colors.textFaint}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
+            returnKeyType="done"
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={() => void submit()}
+            editable={!busy}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? t('authHidePassword') : t('authShowPassword')}
+            onPress={() => setShowPassword((current) => !current)}
+            hitSlop={8}
+            style={styles.passwordToggle}
+          >
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      </View>
 
-      <Pressable style={styles.submitButton} onPress={submit} disabled={busy}>
+      {feedback ? (
+        <View style={[styles.feedback, feedback.kind === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+          <Ionicons
+            name={feedback.kind === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+            size={20}
+            color={feedback.kind === 'success' ? colors.primary : colors.danger}
+          />
+          <Text style={[styles.feedbackText, feedback.kind === 'success' ? styles.successText : styles.errorText]}>
+            {feedback.text}
+          </Text>
+        </View>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={mode === 'signIn' ? t('signIn') : t('signUp')}
+        style={({ pressed }) => [styles.submitButton, (busy || pressed) && styles.submitButtonPressed]}
+        onPress={() => void submit()}
+        disabled={busy}
+      >
         {busy ? (
           <ActivityIndicator color={colors.onPrimary} />
         ) : (
@@ -92,22 +179,50 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.primary },
   tabText: { fontFamily: fontFamily.monoLabel, fontSize: 12, color: colors.textMuted },
   tabTextActive: { color: colors.onPrimary },
-  input: {
+  fieldGroup: { gap: 6 },
+  fieldLabel: { color: colors.textMuted, fontFamily: fontFamily.bodySemiBold, fontSize: 12 },
+  inputShell: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.surfaceLow,
     borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.text,
-    fontFamily: fontFamily.body,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  message: { color: colors.secondary, fontSize: 13, fontFamily: fontFamily.body },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 12,
+    color: colors.text,
+    fontFamily: fontFamily.body,
+    fontSize: 15,
+  },
+  passwordToggle: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  feedback: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  feedbackSuccess: { backgroundColor: 'rgba(83,242,129,0.07)', borderColor: 'rgba(83,242,129,0.3)' },
+  feedbackError: { backgroundColor: 'rgba(255,107,107,0.08)', borderColor: 'rgba(255,107,107,0.35)' },
+  feedbackText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: fontFamily.body },
+  successText: { color: colors.primary },
+  errorText: { color: colors.danger },
   submitButton: {
     backgroundColor: colors.primary,
     borderRadius: radius.lg,
+    minHeight: 50,
     paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
+  submitButtonPressed: { opacity: 0.72 },
   submitButtonText: { color: colors.onPrimary, fontFamily: fontFamily.monoLabel, letterSpacing: 0.5 },
 });

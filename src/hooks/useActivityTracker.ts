@@ -9,6 +9,7 @@ import {
   insertLocationPoint,
 } from '../db/activityRepository';
 import { getProfile } from '../db/profileRepository';
+import { getRoutePlan } from '../db/routePlanRepository';
 import { replaceSplits } from '../db/splitRepository';
 import {
   clearActiveSessionSnapshot,
@@ -24,11 +25,11 @@ import {
   getLocationPermissionState,
   requestBackgroundLocationPermission,
 } from '../services/locationPermissions';
-import { MAX_GPS_ACCURACY_METERS, summarizeActivityPoints } from '../utils/activityMetrics';
+import { distanceToRouteMeters, MAX_GPS_ACCURACY_METERS, summarizeActivityPoints } from '../utils/activityMetrics';
 import { generateId } from '../utils/id';
 import { haversineMeters, MovingAverage } from '../utils/geo';
 import { caloriesForSlice, getMetValue } from '../constants/met';
-import type { ActiveSessionSnapshot, ActivityType, LocationPoint, TrackerStatus } from '../types';
+import type { ActiveSessionSnapshot, ActivityType, LocationPoint, RoutePlanWithWaypoints, TrackerStatus } from '../types';
 
 const SPEED_SMOOTHING_WINDOW = 5;
 const TIMER_TICK_MS = 500;
@@ -49,6 +50,8 @@ interface TrackerState {
   recovered: boolean;
   initializing: boolean;
   routePoints: LocationPoint[];
+  plannedRoute: RoutePlanWithWaypoints | null;
+  offRouteDistanceMeters: number | null;
 }
 
 function initialState(): TrackerState {
@@ -67,6 +70,8 @@ function initialState(): TrackerState {
     recovered: false,
     initializing: true,
     routePoints: [],
+    plannedRoute: null,
+    offRouteDistanceMeters: null,
   };
 }
 
@@ -87,6 +92,7 @@ export function useActivityTracker() {
   const segmentRef = useRef(0);
   const sequenceRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const plannedRouteRef = useRef<RoutePlanWithWaypoints | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -110,6 +116,7 @@ export function useActivityTracker() {
         pausedAt: pausedAtRef.current,
         segment: segmentRef.current,
         status,
+        routePlanId: plannedRouteRef.current?.id ?? null,
       };
     },
     []
@@ -157,6 +164,10 @@ export function useActivityTracker() {
       }
     }
     lastPointRef.current = point;
+    const plannedCoordinates = plannedRouteRef.current?.waypoints ?? [];
+    const offRouteDistanceMeters = plannedCoordinates.length > 1
+      ? distanceToRouteMeters(point, plannedCoordinates)
+      : null;
     setState((current) => ({
       ...current,
       distanceMeters: distanceRef.current,
@@ -165,6 +176,7 @@ export function useActivityTracker() {
       caloriesKcal: caloriesRef.current,
       accuracyMeters: accuracy,
       routePoints: [...current.routePoints.slice(-799), point],
+      offRouteDistanceMeters,
     }));
   }, []);
 
@@ -195,7 +207,7 @@ export function useActivityTracker() {
     setState((current) => ({ ...current, activityType: type }));
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (plannedRoute: RoutePlanWithWaypoints | null = null) => {
     const granted = await ensureForegroundLocationPermission();
     if (!granted) {
       setState((current) => ({ ...current, permissionDenied: true }));
@@ -217,8 +229,9 @@ export function useActivityTracker() {
     pausedAtRef.current = null;
     segmentRef.current = 0;
     sequenceRef.current = 0;
+    plannedRouteRef.current = plannedRoute;
 
-    await createActivity(id, activityTypeRef.current, now);
+    await createActivity(id, activityTypeRef.current, now, plannedRoute?.id ?? null);
     const activeSnapshot = snapshot('tracking');
     if (activeSnapshot) await saveActiveSessionSnapshot(activeSnapshot);
     setState({
@@ -228,6 +241,7 @@ export function useActivityTracker() {
       activityId: id,
       activityType: activityTypeRef.current,
       backgroundGranted: permissions.backgroundGranted,
+      plannedRoute,
     });
     timerRef.current = setInterval(tickElapsed, TIMER_TICK_MS);
     await startWatching();
@@ -281,7 +295,15 @@ export function useActivityTracker() {
     });
     await clearActiveSessionSnapshot();
     activityIdRef.current = null;
-    setState((current) => ({ ...current, status: 'finished', activityId: null, recovered: false }));
+    plannedRouteRef.current = null;
+    setState((current) => ({
+      ...current,
+      status: 'finished',
+      activityId: null,
+      recovered: false,
+      plannedRoute: null,
+      offRouteDistanceMeters: null,
+    }));
     return id;
   }, [clearTimer, stopWatching]);
 
@@ -292,6 +314,7 @@ export function useActivityTracker() {
     if (id) await deleteActivity(id);
     await clearActiveSessionSnapshot();
     activityIdRef.current = null;
+    plannedRouteRef.current = null;
     setState({ ...initialState(), initializing: false });
   }, [clearTimer, stopWatching]);
 
@@ -315,6 +338,8 @@ export function useActivityTracker() {
         return;
       }
 
+      const plannedRoute = activity.route_plan_id ? await getRoutePlan(activity.route_plan_id) : null;
+
       const summary = summarizeActivityPoints(activity.id, activity.type, points, profile.weight_kg);
       activityIdRef.current = activity.id;
       activityTypeRef.current = activity.type;
@@ -328,6 +353,7 @@ export function useActivityTracker() {
       maxSpeedRef.current = summary.maxSpeedMs;
       caloriesRef.current = summary.caloriesKcal;
       lastPointRef.current = points.at(-1) ?? null;
+      plannedRouteRef.current = plannedRoute;
       setState({
         status: activeSnapshot.status,
         activityType: activity.type,
@@ -343,6 +369,10 @@ export function useActivityTracker() {
         recovered: true,
         initializing: false,
         routePoints: points.slice(-800),
+        plannedRoute,
+        offRouteDistanceMeters: plannedRoute && points.length
+          ? distanceToRouteMeters(points.at(-1)!, plannedRoute.waypoints)
+          : null,
       });
       if (activeSnapshot.status === 'tracking') {
         timerRef.current = setInterval(tickElapsed, TIMER_TICK_MS);
