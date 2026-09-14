@@ -9,6 +9,7 @@ import { getGoals, getPendingGoals, setGoalSyncState, upsertRemoteGoal } from '.
 import { getProfile, mergeRemoteProfile, setProfileSynced } from '../db/profileRepository';
 import { getSplitsByActivity, upsertRemoteSplits } from '../db/splitRepository';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
+import { toRemoteActivity } from './syncPayloads';
 import type { Activity, Goal, LocationPoint, ProfileSex, Split } from '../types';
 
 const UPLOAD_CHUNK_SIZE = 500;
@@ -42,11 +43,6 @@ function throwSyncError(step: string, error: unknown): void {
 
 function profileSex(value: unknown): ProfileSex {
   return value === 'female' || value === 'male' ? value : 'unspecified';
-}
-
-function toRemoteActivity(activity: Activity, userId: string) {
-  const payload = { ...activity, user_id: userId, sync_state: undefined, route_plan_id: undefined };
-  return payload;
 }
 
 function fromRemoteActivity(row: Record<string, unknown>): Activity {
@@ -132,8 +128,6 @@ async function pullRemote(userId: string): Promise<number> {
 
 async function pushActivity(activity: Activity, userId: string) {
   const payload = toRemoteActivity(activity, userId);
-  delete (payload as { sync_state?: unknown }).sync_state;
-  delete (payload as { route_plan_id?: unknown }).route_plan_id;
   const { error } = await supabase.from('activities').upsert(payload);
   throwSyncError('Upload activity', error);
   if (!activity.deleted_at) {
@@ -151,7 +145,16 @@ async function pushActivity(activity: Activity, userId: string) {
       throwSyncError('Upload GPS points', result.error);
     }
     if (splits.length) {
-      const result = await supabase.from('splits').upsert(splits.map((split) => ({ ...split, user_id: userId, sync_state: undefined })));
+      const result = await supabase.from('splits').upsert(splits.map((split) => ({
+        id: split.id,
+        user_id: userId,
+        activity_id: split.activity_id,
+        split_index: split.split_index,
+        distance_meters: split.distance_meters,
+        duration_ms: split.duration_ms,
+        avg_speed: split.avg_speed,
+        updated_at: split.updated_at,
+      })));
       throwSyncError('Upload splits', result.error);
     }
   }
