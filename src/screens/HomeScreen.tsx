@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getAllActivities } from '../db/activityRepository';
 import { getGoals } from '../db/goalRepository';
+import { getProfile } from '../db/profileRepository';
 import { calculateStreak, startOfWeek } from '../utils/activityMetrics';
 import { formatDistanceKm, formatDuration } from '../utils/format';
 import { colors, fontFamily, spacing } from '../theme/theme';
@@ -12,7 +13,7 @@ import { GlassCard, Label, MonoValue, PillButton } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
 import { ProgressRing } from '../components/ProgressRing';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { Activity, Goal } from '../types';
+import type { Activity, Goal, Profile } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 
 export default function HomeScreen() {
@@ -20,14 +21,16 @@ export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      Promise.all([getAllActivities(), getGoals()]).then(([activityRows, goalRows]) => {
+      Promise.all([getAllActivities(), getGoals(), getProfile()]).then(([activityRows, goalRows, profileRow]) => {
         if (!mounted) return;
         setActivities(activityRows);
         setGoals(goalRows);
+        setProfile(profileRow);
       });
       return () => { mounted = false; };
     }, [])
@@ -47,13 +50,28 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerCopy}>
               <Text style={styles.eyebrow}>RUNTRACKER</Text>
-              <Text style={styles.title}>{t('homeGreeting')}</Text>
+              <Text numberOfLines={1} style={styles.title}>
+                {profile?.display_name ? `${t('homeGreeting')}, ${profile.display_name}` : t('homeGreeting')}
+              </Text>
             </View>
-            <View style={styles.streakBadge}>
-              <IconBadge name="fire" set="mci" size={30} color={colors.secondary} />
-              <View><MonoValue size={17}>{streak}</MonoValue><Label>{t('dayStreak')}</Label></View>
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('profileTitle')}
+                onPress={() => navigation.navigate('Main', { screen: 'Profile' })}
+              >
+                {profile?.avatar_data ? (
+                  <Image accessible={false} source={{ uri: profile.avatar_data }} style={styles.avatar} />
+                ) : (
+                  <IconBadge name="account-circle" set="mci" size={40} />
+                )}
+              </Pressable>
+              <View style={styles.streakBadge}>
+                <IconBadge name="fire" set="mci" size={30} color={colors.secondary} />
+                <View><MonoValue size={17}>{streak}</MonoValue><Label>{t('dayStreak')}</Label></View>
+              </View>
             </View>
           </View>
 
@@ -136,9 +154,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   safe: { flex: 1 },
   content: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.xs },
+  headerCopy: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   eyebrow: { color: colors.primary, fontFamily: fontFamily.monoLabel, fontSize: 10, letterSpacing: 2 },
-  title: { color: colors.text, fontFamily: fontFamily.display, fontSize: 29 },
+  title: { color: colors.text, fontFamily: fontFamily.display, fontSize: 26 },
+  avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: colors.primary },
   streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceLow, padding: 8, borderRadius: 14 },
   goalCard: { marginBottom: spacing.xs },
   goalContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

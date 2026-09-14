@@ -28,7 +28,7 @@ import {
 import { distanceToRouteMeters, MAX_GPS_ACCURACY_METERS, summarizeActivityPoints } from '../utils/activityMetrics';
 import { generateId } from '../utils/id';
 import { haversineMeters, MovingAverage } from '../utils/geo';
-import { caloriesForSlice, getMetValue } from '../constants/met';
+import { caloriesForSlice, getMetValue, type CalorieProfile } from '../constants/met';
 import type { ActiveSessionSnapshot, ActivityType, LocationPoint, RoutePlanWithWaypoints, TrackerStatus } from '../types';
 
 const SPEED_SMOOTHING_WINDOW = 5;
@@ -83,7 +83,7 @@ export function useActivityTracker() {
   const distanceRef = useRef(0);
   const maxSpeedRef = useRef(0);
   const caloriesRef = useRef(0);
-  const weightKgRef = useRef(65);
+  const calorieProfileRef = useRef<CalorieProfile>({ weightKg: 65, heightCm: 170, age: 30, sex: 'unspecified' });
   const activityTypeRef = useRef<ActivityType>('running');
   const activityIdRef = useRef<string | null>(null);
   const startedAtRef = useRef(0);
@@ -157,7 +157,7 @@ export function useActivityTracker() {
           maxSpeedRef.current = Math.max(maxSpeedRef.current, currentSpeedMs);
           caloriesRef.current += caloriesForSlice(
             getMetValue(activityTypeRef.current, currentSpeedMs * 3.6),
-            weightKgRef.current,
+            calorieProfileRef.current,
             deltaMs / 3_600_000
           );
         }
@@ -215,7 +215,12 @@ export function useActivityTracker() {
     }
 
     const [profile, permissions] = await Promise.all([getProfile(), getLocationPermissionState()]);
-    weightKgRef.current = profile.weight_kg;
+    calorieProfileRef.current = {
+      weightKg: profile.weight_kg,
+      heightCm: profile.height_cm,
+      age: profile.age,
+      sex: profile.sex,
+    };
     const id = generateId();
     const now = Date.now();
     activityIdRef.current = id;
@@ -282,7 +287,7 @@ export function useActivityTracker() {
     const pauseInProgress = pausedAtRef.current ? endTime - pausedAtRef.current : 0;
     const pausedDuration = pausedAccumRef.current + pauseInProgress;
     const points = await getLocationPointsByActivity(id);
-    const summary = summarizeActivityPoints(id, activityTypeRef.current, points, weightKgRef.current, endTime);
+    const summary = summarizeActivityPoints(id, activityTypeRef.current, points, calorieProfileRef.current, endTime);
     await replaceSplits(id, summary.splits);
     await finishActivity(id, {
       end_time: endTime,
@@ -340,10 +345,16 @@ export function useActivityTracker() {
 
       const plannedRoute = activity.route_plan_id ? await getRoutePlan(activity.route_plan_id) : null;
 
-      const summary = summarizeActivityPoints(activity.id, activity.type, points, profile.weight_kg);
+      const calorieProfile: CalorieProfile = {
+        weightKg: profile.weight_kg,
+        heightCm: profile.height_cm,
+        age: profile.age,
+        sex: profile.sex,
+      };
+      const summary = summarizeActivityPoints(activity.id, activity.type, points, calorieProfile);
       activityIdRef.current = activity.id;
       activityTypeRef.current = activity.type;
-      weightKgRef.current = profile.weight_kg;
+      calorieProfileRef.current = calorieProfile;
       startedAtRef.current = activeSnapshot.startedAt;
       pausedAccumRef.current = activeSnapshot.pausedAccumulatedMs;
       pausedAtRef.current = activeSnapshot.pausedAt;

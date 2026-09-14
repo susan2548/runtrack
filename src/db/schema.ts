@@ -87,7 +87,11 @@ CREATE TABLE IF NOT EXISTS app_state (
 CREATE TABLE IF NOT EXISTS profile (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   weight_kg REAL NOT NULL DEFAULT 65,
+  height_cm REAL NOT NULL DEFAULT 170,
+  age INTEGER NOT NULL DEFAULT 30,
+  sex TEXT NOT NULL DEFAULT 'unspecified',
   display_name TEXT,
+  avatar_data TEXT,
   user_id TEXT,
   onboarding_completed INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER,
@@ -113,6 +117,10 @@ export const LOCATION_COLUMNS: Record<string, string> = {
 };
 
 export const PROFILE_COLUMNS: Record<string, string> = {
+  height_cm: 'REAL NOT NULL DEFAULT 170',
+  age: 'INTEGER NOT NULL DEFAULT 30',
+  sex: "TEXT NOT NULL DEFAULT 'unspecified'",
+  avatar_data: 'TEXT',
   onboarding_completed: 'INTEGER NOT NULL DEFAULT 0',
   sync_state: "TEXT NOT NULL DEFAULT 'pending'",
 };

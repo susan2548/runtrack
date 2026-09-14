@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { ACTIVITY_COLUMNS, CREATE_TABLES_SQL, LOCATION_COLUMNS, PROFILE_COLUMNS } from './schema';
 
 const DB_NAME = 'runtracker.db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 

@@ -9,7 +9,7 @@ import { getGoals, getPendingGoals, setGoalSyncState, upsertRemoteGoal } from '.
 import { getProfile, mergeRemoteProfile, setProfileSynced } from '../db/profileRepository';
 import { getSplitsByActivity, upsertRemoteSplits } from '../db/splitRepository';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
-import type { Activity, Goal, LocationPoint, Split } from '../types';
+import type { Activity, Goal, LocationPoint, ProfileSex, Split } from '../types';
 
 const UPLOAD_CHUNK_SIZE = 500;
 const RETRY_DELAYS_MS = [0, 500, 1500];
@@ -20,6 +20,29 @@ export type SyncStatus =
   | { state: 'error'; message: string };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function describeSyncError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>;
+    const message = typeof value.message === 'string' ? value.message : '';
+    const details = typeof value.details === 'string' ? value.details : '';
+    const hint = typeof value.hint === 'string' ? value.hint : '';
+    const code = typeof value.code === 'string' ? `[${value.code}]` : '';
+    const summary = [code, message, details, hint].filter(Boolean).join(' ');
+    if (summary) return summary.slice(0, 320);
+  }
+  return 'The server returned an unreadable error';
+}
+
+function throwSyncError(step: string, error: unknown): void {
+  if (error) throw new Error(`${step}: ${describeSyncError(error)}`);
+}
+
+function profileSex(value: unknown): ProfileSex {
+  return value === 'female' || value === 'male' ? value : 'unspecified';
+}
 
 function toRemoteActivity(activity: Activity, userId: string) {
   const payload = { ...activity, user_id: userId, sync_state: undefined, route_plan_id: undefined };
@@ -55,8 +78,11 @@ async function pullRemote(userId: string): Promise<number> {
     supabase.from('goals').select('*').eq('user_id', userId).limit(20),
     supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
   ]);
-  const firstError = [activitiesResult.error, pointsResult.error, splitsResult.error, goalsResult.error, profileResult.error].find(Boolean);
-  if (firstError) throw firstError;
+  throwSyncError('Download activities', activitiesResult.error);
+  throwSyncError('Download GPS points', pointsResult.error);
+  throwSyncError('Download splits', splitsResult.error);
+  throwSyncError('Download goals', goalsResult.error);
+  throwSyncError('Download profile', profileResult.error);
 
   const activities = (activitiesResult.data ?? []).map((row) => fromRemoteActivity(row));
   for (const activity of activities) await upsertRemoteActivity(activity);
@@ -93,7 +119,11 @@ async function pullRemote(userId: string): Promise<number> {
       : Date.parse(String(profileResult.data.updated_at));
     await mergeRemoteProfile({
       weight_kg: Number(profileResult.data.weight_kg),
+      height_cm: Number(profileResult.data.height_cm ?? 170),
+      age: Number(profileResult.data.age ?? 30),
+      sex: profileSex(profileResult.data.sex),
       display_name: profileResult.data.display_name,
+      avatar_data: typeof profileResult.data.avatar_data === 'string' ? profileResult.data.avatar_data : null,
       updated_at: Number.isFinite(remoteProfileUpdatedAt) ? remoteProfileUpdatedAt : 0,
     });
   }
@@ -105,7 +135,7 @@ async function pushActivity(activity: Activity, userId: string) {
   delete (payload as { sync_state?: unknown }).sync_state;
   delete (payload as { route_plan_id?: unknown }).route_plan_id;
   const { error } = await supabase.from('activities').upsert(payload);
-  if (error) throw error;
+  throwSyncError('Upload activity', error);
   if (!activity.deleted_at) {
     const [points, splits] = await Promise.all([
       getLocationPointsByActivity(activity.id),
@@ -118,11 +148,11 @@ async function pushActivity(activity: Activity, userId: string) {
         longitude: point.longitude, timestamp: point.timestamp, accuracy: point.accuracy,
       }));
       const result = await supabase.from('location_points').upsert(chunk, { onConflict: 'point_key' });
-      if (result.error) throw result.error;
+      throwSyncError('Upload GPS points', result.error);
     }
     if (splits.length) {
       const result = await supabase.from('splits').upsert(splits.map((split) => ({ ...split, user_id: userId, sync_state: undefined })));
-      if (result.error) throw result.error;
+      throwSyncError('Upload splits', result.error);
     }
   }
   await setActivitySyncState(activity.id, 'synced');
@@ -136,15 +166,16 @@ async function pushLocal(userId: string): Promise<number> {
       id: `${userId}:${goal.activity_type}`, user_id: userId, activity_type: goal.activity_type,
       weekly_distance_meters: goal.weekly_distance_meters, updated_at: goal.updated_at,
     });
-    if (error) throw error;
+    throwSyncError('Upload goals', error);
     await setGoalSyncState(goal.id, 'synced');
   }
   if (profile.sync_state !== 'synced') {
     const { error } = await supabase.from('profiles').upsert({
       id: userId, weight_kg: profile.weight_kg, display_name: profile.display_name,
+      height_cm: profile.height_cm, age: profile.age, sex: profile.sex, avatar_data: profile.avatar_data,
       updated_at: new Date(profile.updated_at ?? Date.now()).toISOString(),
     });
-    if (error) throw error;
+    throwSyncError('Upload profile', error);
     await setProfileSynced();
   }
   return activities.length + goals.length;
@@ -171,7 +202,7 @@ export async function syncAll(userId: string | null, isOnline: boolean): Promise
       lastError = error;
     }
   }
-  return { state: 'error', message: lastError instanceof Error ? lastError.message : 'Sync failed for an unknown reason' };
+  return { state: 'error', message: describeSyncError(lastError) };
 }
 
 export async function exportCloudReadySnapshot() {

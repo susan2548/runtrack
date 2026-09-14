@@ -55,7 +55,11 @@ create table if not exists public.goals (
 create table if not exists public.profiles (
   id uuid references auth.users (id) on delete cascade primary key,
   weight_kg double precision not null default 65,
+  height_cm double precision not null default 170,
+  age integer not null default 30,
+  sex text not null default 'unspecified' check (sex in ('female', 'male', 'unspecified')),
   display_name text,
+  avatar_data text,
   updated_at timestamptz not null default now()
 );
 
@@ -69,6 +73,11 @@ alter table public.activities add column if not exists deleted_at bigint;
 alter table public.activities add column if not exists route_plan_id text;
 update public.activities set updated_at = coalesce(updated_at, start_time) where updated_at is null;
 alter table public.activities alter column updated_at set not null;
+
+alter table public.profiles add column if not exists height_cm double precision not null default 170;
+alter table public.profiles add column if not exists age integer not null default 30;
+alter table public.profiles add column if not exists sex text not null default 'unspecified';
+alter table public.profiles add column if not exists avatar_data text;
 
 alter table public.location_points add column if not exists point_key text;
 alter table public.location_points add column if not exists sequence bigint not null default 0;
@@ -100,3 +109,14 @@ create policy "points owner access" on public.location_points for all using (aut
 create policy "splits owner access" on public.splits for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "goals owner access" on public.goals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "profiles owner access" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Explicit API privileges make the schema work even when the project was
+-- created without Supabase's usual default grants. RLS above still isolates users.
+grant select, insert, update, delete on public.activities to authenticated;
+grant select, insert, update, delete on public.location_points to authenticated;
+grant select, insert, update, delete on public.splits to authenticated;
+grant select, insert, update, delete on public.goals to authenticated;
+grant select, insert, update, delete on public.profiles to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+notify pgrst, 'reload schema';

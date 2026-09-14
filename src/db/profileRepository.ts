@@ -1,7 +1,19 @@
 import { getDb } from './database';
-import type { Profile } from '../types';
+import type { Profile, ProfileSex } from '../types';
 
 const DEFAULT_WEIGHT_KG = 65;
+const DEFAULT_HEIGHT_CM = 170;
+const DEFAULT_AGE = 30;
+
+export interface ProfileUpdate {
+  weightKg?: number;
+  heightCm?: number;
+  age?: number;
+  sex?: ProfileSex;
+  displayName?: string | null;
+  avatarData?: string | null;
+  onboardingCompleted?: boolean;
+}
 
 export async function getProfile(): Promise<Profile> {
   const db = await getDb();
@@ -11,7 +23,11 @@ export async function getProfile(): Promise<Profile> {
   const created: Profile = {
     id: 1,
     weight_kg: DEFAULT_WEIGHT_KG,
+    height_cm: DEFAULT_HEIGHT_CM,
+    age: DEFAULT_AGE,
+    sex: 'unspecified',
     display_name: null,
+    avatar_data: null,
     user_id: null,
     onboarding_completed: 0,
     updated_at: Date.now(),
@@ -19,10 +35,14 @@ export async function getProfile(): Promise<Profile> {
   };
   await db.runAsync(
     `INSERT INTO profile
-      (id, weight_kg, display_name, user_id, onboarding_completed, updated_at, sync_state)
-     VALUES (1, ?, ?, ?, ?, ?, ?)`,
+      (id, weight_kg, height_cm, age, sex, display_name, avatar_data, user_id, onboarding_completed, updated_at, sync_state)
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     created.weight_kg,
+    created.height_cm,
+    created.age,
+    created.sex,
     created.display_name,
+    created.avatar_data,
     created.user_id,
     created.onboarding_completed,
     created.updated_at,
@@ -31,19 +51,20 @@ export async function getProfile(): Promise<Profile> {
   return created;
 }
 
-export async function updateProfile(fields: {
-  weightKg?: number;
-  displayName?: string | null;
-  onboardingCompleted?: boolean;
-}): Promise<void> {
+export async function updateProfile(fields: ProfileUpdate): Promise<void> {
   const db = await getDb();
   const current = await getProfile();
   await db.runAsync(
     `UPDATE profile
-     SET weight_kg = ?, display_name = ?, onboarding_completed = ?, updated_at = ?, sync_state = 'pending'
+     SET weight_kg = ?, height_cm = ?, age = ?, sex = ?, display_name = ?, avatar_data = ?,
+         onboarding_completed = ?, updated_at = ?, sync_state = 'pending'
      WHERE id = 1`,
     fields.weightKg ?? current.weight_kg,
+    fields.heightCm ?? current.height_cm,
+    fields.age ?? current.age,
+    fields.sex ?? current.sex,
     fields.displayName === undefined ? current.display_name : fields.displayName,
+    fields.avatarData === undefined ? current.avatar_data : fields.avatarData,
     fields.onboardingCompleted === undefined
       ? current.onboarding_completed
       : fields.onboardingCompleted
@@ -57,8 +78,8 @@ export async function setWeightKg(weightKg: number): Promise<void> {
   return updateProfile({ weightKg });
 }
 
-export async function completeOnboarding(weightKg: number): Promise<void> {
-  return updateProfile({ weightKg, onboardingCompleted: true });
+export async function completeOnboarding(profile: Pick<ProfileUpdate, 'weightKg' | 'heightCm' | 'age' | 'sex'>): Promise<void> {
+  return updateProfile({ ...profile, onboardingCompleted: true });
 }
 
 export async function setLinkedUser(userId: string | null, displayName: string | null): Promise<void> {
@@ -79,16 +100,23 @@ export async function setProfileSynced(): Promise<void> {
   await db.runAsync("UPDATE profile SET sync_state = 'synced' WHERE id = 1");
 }
 
-export async function mergeRemoteProfile(remote: Pick<Profile, 'weight_kg' | 'display_name' | 'updated_at'>) {
+export async function mergeRemoteProfile(
+  remote: Pick<Profile, 'weight_kg' | 'height_cm' | 'age' | 'sex' | 'display_name' | 'avatar_data' | 'updated_at'>
+) {
   const db = await getDb();
   const local = await getProfile();
   if ((local.updated_at ?? 0) > (remote.updated_at ?? 0) && local.sync_state !== 'synced') return;
   await db.runAsync(
     `UPDATE profile
-     SET weight_kg = ?, display_name = ?, updated_at = ?, sync_state = 'synced'
+     SET weight_kg = ?, height_cm = ?, age = ?, sex = ?, display_name = ?, avatar_data = ?,
+         updated_at = ?, sync_state = 'synced'
      WHERE id = 1`,
     remote.weight_kg,
+    remote.height_cm,
+    remote.age,
+    remote.sex,
     remote.display_name,
+    remote.avatar_data,
     remote.updated_at
   );
 }

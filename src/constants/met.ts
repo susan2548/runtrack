@@ -1,4 +1,11 @@
-import type { ActivityType } from '../types';
+import type { ActivityType, ProfileSex } from '../types';
+
+export interface CalorieProfile {
+  weightKg: number;
+  heightCm: number;
+  age: number;
+  sex: ProfileSex;
+}
 
 /**
  * MET (Metabolic Equivalent of Task) lookup tables, approximated from the
@@ -36,7 +43,28 @@ export function getMetValue(type: ActivityType, speedKmh: number): number {
   return bucket ? bucket.met : table[table.length - 1].met;
 }
 
-/** kcal burned for a single time slice: MET x weight(kg) x time(hours). */
-export function caloriesForSlice(met: number, weightKg: number, durationHours: number): number {
-  return met * weightKg * durationHours;
+/**
+ * Resting energy from Mifflin-St Jeor. The neutral option uses the midpoint
+ * of the male/female constants rather than guessing a sex for the user.
+ */
+export function restingCaloriesPerHour(profile: CalorieProfile): number {
+  const sexConstant = profile.sex === 'male' ? 5 : profile.sex === 'female' ? -161 : -78;
+  const dailyKcal =
+    10 * profile.weightKg +
+    6.25 * profile.heightCm -
+    5 * profile.age +
+    sexConstant;
+  return Math.max(800, dailyKcal) / 24;
+}
+
+/** Personalized MET estimate; numeric input keeps legacy activities/tests compatible. */
+export function caloriesForSlice(
+  met: number,
+  profileOrWeight: CalorieProfile | number,
+  durationHours: number
+): number {
+  const restingKcalPerHour = typeof profileOrWeight === 'number'
+    ? profileOrWeight
+    : restingCaloriesPerHour(profileOrWeight);
+  return met * restingKcalPerHour * durationHours;
 }

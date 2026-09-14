@@ -1,5 +1,6 @@
 export type ActivityType = 'running' | 'cycling';
 export type SyncState = 'pending' | 'synced' | 'error';
+export type ProfileSex = 'female' | 'male' | 'unspecified';
 
 export interface Activity {
   id: string;
@@ -90,7 +91,11 @@ export interface RoutePlanWithWaypoints extends RoutePlan {
 export interface Profile {
   id: 1;
   weight_kg: number;
+  height_cm: number;
+  age: number;
+  sex: ProfileSex;
   display_name: string | null;
+  avatar_data: string | null;
   user_id: string | null;
   onboarding_completed: number;
   updated_at: number | null;

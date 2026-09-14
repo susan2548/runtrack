@@ -23,7 +23,7 @@ export default function OnboardingScreen() {
   const finish = async (requestLocation: boolean) => {
     if (requestLocation) await ensureForegroundLocationPermission();
     await Promise.all([
-      completeOnboarding(weight),
+      completeOnboarding({ weightKg: weight, heightCm: 170, age: 30, sex: 'unspecified' }),
       upsertGoal('running', runGoal * 1000),
       upsertGoal('cycling', cycleGoal * 1000),
     ]);

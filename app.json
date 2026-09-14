@@ -2,7 +2,7 @@
   "expo": {
     "name": "RunTrackerApp",
     "slug": "RunTrackerApp",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "runtracker",
     "orientation": "portrait",
     "icon": "./assets/runtracker-icon.png",
@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#070A09",
         "foregroundImage": "./assets/runtracker-icon-foreground.png"
@@ -32,7 +33,15 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "RunTracker ใช้รูปที่คุณเลือกเพื่อแสดงเป็นรูปโปรไฟล์",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

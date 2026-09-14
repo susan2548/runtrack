@@ -1,4 +1,4 @@
-import { caloriesForSlice, getMetValue } from '../constants/met';
+import { caloriesForSlice, getMetValue, type CalorieProfile } from '../constants/met';
 import type { ActivityType, LocationPoint, MapCoordinate, Split } from '../types';
 import { haversineMeters } from './geo';
 
@@ -71,7 +71,7 @@ export function summarizeActivityPoints(
   activityId: string,
   type: ActivityType,
   points: LocationPoint[],
-  weightKg: number,
+  calorieProfile: CalorieProfile | number,
   updatedAt = Date.now()
 ): ActivitySummary {
   const sorted = [...points].filter(isUsablePoint).sort((a, b) => a.timestamp - b.timestamp);
@@ -105,7 +105,7 @@ export function summarizeActivityPoints(
     distanceMeters += deltaMeters;
     movingTimeMs += deltaMs;
     maxSpeedMs = Math.max(maxSpeedMs, speedMs);
-    caloriesKcal += caloriesForSlice(getMetValue(type, speedMs * 3.6), weightKg, deltaMs / 3_600_000);
+    caloriesKcal += caloriesForSlice(getMetValue(type, speedMs * 3.6), calorieProfile, deltaMs / 3_600_000);
     splitDistance += deltaMeters;
     splitDuration += deltaMs;
 
