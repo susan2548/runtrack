@@ -7,11 +7,6 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { getProfile, updateProfile } from '../db/profileRepository';
 import { clearActivityData, getAllActivities } from '../db/activityRepository';
 import { getGoals, upsertGoal } from '../db/goalRepository';
-import { useAuth } from '../hooks/useAuth';
-import { useAutoSync } from '../hooks/useAutoSync';
-import { signOut } from '../services/authService';
-import { isSupabaseConfigured } from '../services/supabaseClient';
-import AuthForm from '../components/AuthForm';
 import { colors, fontFamily, radius, spacing } from '../theme/theme';
 import { GlassCard, Label, PillButton, LanguageToggle } from '../components/ui';
 import { IconBadge } from '../components/IconBadge';
@@ -25,8 +20,6 @@ const SEX_OPTIONS: ProfileSex[] = ['female', 'male', 'unspecified'];
 
 export default function ProfileScreen() {
   const { t } = useLanguage();
-  const { user, initializing } = useAuth();
-  const { lastStatus, isSyncing, runSync } = useAutoSync(user?.id ?? null);
   const [displayName, setDisplayName] = useState('');
   const [avatarData, setAvatarData] = useState<string | null>(null);
   const [weightInput, setWeightInput] = useState(65);
@@ -93,7 +86,6 @@ export default function ProfileScreen() {
       sex: sexInput,
     });
     setSavedMessage(t('profileSaved'));
-    if (user) await runSync();
   };
 
   const saveGoals = async () => {
@@ -102,7 +94,6 @@ export default function ProfileScreen() {
       upsertGoal('cycling', cycleGoalInput * 1000),
     ]);
     setSavedMessage(t('profileSaved'));
-    if (user) await runSync();
   };
 
   const exportActivities = async () => {
@@ -116,24 +107,6 @@ export default function ProfileScreen() {
       { text: t('delete'), style: 'destructive', onPress: () => void clearActivityData() },
     ]);
   };
-
-  const syncSummary = (() => {
-    if (!isSupabaseConfigured) return t('notConfigured');
-    if (isSyncing) return t('syncing');
-    if (!lastStatus) return '';
-    switch (lastStatus.state) {
-      case 'idle':
-        return lastStatus.uploaded > 0
-          ? `${t('syncSuccessPrefix')} ${lastStatus.uploaded} ${t('activitiesWord')}`
-          : t('syncUpToDate');
-      case 'error':
-        return `${t('syncFailedPrefix')} ${lastStatus.message}`;
-      case 'skipped':
-        if (lastStatus.reason === 'offline') return t('syncOffline');
-        if (lastStatus.reason === 'signed-out') return t('syncSignedOut');
-        return '';
-    }
-  })();
 
   return (
     <View style={styles.root}>
@@ -213,7 +186,7 @@ export default function ProfileScreen() {
               unspecified: t('sexUnspecified'),
             }} />
             <Text style={styles.hint}>{t('calorieProfileHint')}</Text>
-            <PillButton label={t('save')} onPress={() => void saveProfile()} variant="secondary" disabled={photoBusy || isSyncing} />
+            <PillButton label={t('save')} onPress={() => void saveProfile()} variant="secondary" disabled={photoBusy} />
             {savedMessage ? <Text style={styles.savedMessage}>{savedMessage}</Text> : null}
           </GlassCard>
 
@@ -224,35 +197,10 @@ export default function ProfileScreen() {
             </View>
             <GoalRow label={t('modeRun')} value={runGoalInput} onChange={setRunGoalInput} min={1} max={100} step={1} />
             <GoalRow label={t('modeCycle')} value={cycleGoalInput} onChange={setCycleGoalInput} min={5} max={300} step={5} />
-            <PillButton label={t('saveChanges')} onPress={() => void saveGoals()} variant="secondary" disabled={isSyncing} />
+            <PillButton label={t('saveChanges')} onPress={() => void saveGoals()} variant="secondary" />
           </GlassCard>
 
           <GlassCard style={styles.card} delay={80}>
-            <View style={styles.cardTitleRow}>
-              <IconBadge name="cloud-sync-outline" set="mci" size={32} color={colors.tertiary} />
-              <Label style={styles.cardTitleLabel}>{t('accountAndSync')}</Label>
-            </View>
-            {initializing ? (
-              <Text style={styles.mutedText}>{t('checkingSignIn')}</Text>
-            ) : user ? (
-              <>
-                <Text style={styles.emailText}>{user.email}</Text>
-                <Text selectable style={[styles.mutedText, lastStatus?.state === 'error' && styles.errorText]}>{syncSummary}</Text>
-                {lastStatus?.state === 'error' ? <Text style={styles.syncHint}>{t('syncRepairHint')}</Text> : null}
-                <View style={styles.actionsRow}>
-                  <PillButton label={t('syncNow')} onPress={() => void runSync()} variant="secondary" disabled={isSyncing} flex={1} />
-                  <PillButton label={t('signOut')} onPress={() => void signOut()} variant="secondary" flex={1} />
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.mutedText}>{syncSummary}</Text>
-                <AuthForm />
-              </>
-            )}
-          </GlassCard>
-
-          <GlassCard style={styles.card} delay={120}>
             <View style={styles.cardTitleRow}>
               <IconBadge name="shield-lock-outline" set="mci" size={32} color={colors.tertiary} />
               <Label style={styles.cardTitleLabel}>{t('dataAndPrivacy')}</Label>
@@ -338,11 +286,6 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: colors.onPrimary },
   hint: { color: colors.textMuted, fontFamily: fontFamily.body, fontSize: 12, lineHeight: 18, marginVertical: spacing.xs },
   savedMessage: { color: colors.primary, fontSize: 12, marginTop: spacing.xs, fontFamily: fontFamily.body },
-  emailText: { color: colors.text, fontFamily: fontFamily.bodySemiBold, marginTop: spacing.xs },
-  mutedText: { color: colors.textMuted, fontSize: 12, lineHeight: 18, fontFamily: fontFamily.body, marginTop: 2 },
-  errorText: { color: colors.secondary },
-  syncHint: { color: colors.textMuted, fontSize: 11, lineHeight: 17, fontFamily: fontFamily.body, marginTop: spacing.xs },
-  actionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   goalGroup: { gap: spacing.xs },
   goalLabel: { color: colors.text, fontFamily: fontFamily.bodySemiBold },
 });
